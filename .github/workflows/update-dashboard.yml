@@ -27,6 +27,12 @@ jobs:
           # Fetch latest changes to avoid conflicts
           fetch-depth: 0
 
+      - name: Pull latest changes first
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git pull --rebase origin ${{ github.ref_name }}
+
       - name: Generate new dashboard content
         run: |
           # Store previous content for comparison
@@ -60,16 +66,12 @@ jobs:
             echo "meaningful_changes=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Pull latest changes
+      - name: Commit and push changes
         if: steps.changes.outputs.meaningful_changes == 'true'
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git pull --rebase origin ${{ github.ref_name }}
-
-      - name: Commit and push changes
-        if: steps.changes.outputs.meaningful_changes == 'true'
-        run: |
+          
           git add index.html
           if ! git diff --staged --quiet; then
             git commit -m "Automated dashboard update - $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
@@ -80,18 +82,18 @@ jobs:
                 echo "Successfully pushed changes"
                 break
               else
-                echo "Push failed, attempt $i/5"
+                echo "Push failed, attempt $i/5 - trying to sync"
                 if [ $i -eq 5 ]; then
                   echo "Failed to push after 5 attempts"
                   exit 1
                 fi
-                # Exponential backoff for high frequency
-                sleep $((i * 3))
-                git pull --rebase origin ${{ github.ref_name }}
+                # Pull changes and retry
+                sleep $((i * 2))
+                git pull --rebase origin ${{ github.ref_name }} || git reset --hard HEAD~1
               fi
             done
           else
-            echo "No changes to commit after rebase."
+            echo "No changes to commit."
           fi
 
       - name: Notify on failure
