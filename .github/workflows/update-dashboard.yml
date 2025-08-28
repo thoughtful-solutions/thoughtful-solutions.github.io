@@ -1,38 +1,101 @@
 # .github/workflows/update-dashboard.yml
+# WARNING: 15-minute frequency will consume ~35,000 GitHub Actions minutes per year
+# Ensure you have sufficient quota or consider GitHub Enterprise
 name: Update Dashboard
 
 on:
   schedule:
-    # Runs every 15 minutes
+    # Runs every 15 minutes as requested
     - cron: '*/15 * * * *'
-  workflow_dispatch: # Allows manual triggering
+  workflow_dispatch:
+
+# Prevent concurrent runs - critical for 15-minute frequency
+concurrency:
+  group: dashboard-update
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10  # Prevent long-running jobs with high frequency
     permissions:
-      contents: write # Grants permission to push to the repository
+      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # Fetch latest changes to avoid conflicts
+          fetch-depth: 0
 
       - name: Generate new dashboard content
         run: |
-          # This is where you would run a script to fetch data from an API
-          # or a database. For this example, we'll just add the current timestamp.
+          # Store previous content for comparison
+          if [ -f index.html ]; then
+            cp index.html index.html.backup
+          fi
+          
+          # Generate new content
           echo "<h1>My Live Dashboard</h1>" > index.html
-          echo "<p>This dashboard was last updated at: $(date)</p>" >> index.html
-          echo "<p>In a real-world scenario, you would replace this with a script that pulls data and generates a full HTML/CSS/JS dashboard.</p>" >> index.html
+          echo "<p>Last updated: $(date)</p>" >> index.html
+          echo "<p>Build number: ${{ github.run_number }}</p>" >> index.html
+          
+          # Add your actual dashboard generation logic here
+          # ./scripts/generate-dashboard.sh || exit 1
 
-      - name: Commit and push changes
+      - name: Check for meaningful changes
+        id: changes
+        run: |
+          # Compare with backup, excluding timestamp lines
+          if [ -f index.html.backup ]; then
+            # Remove timestamp lines for comparison
+            grep -v "Last updated:" index.html > index.html.clean || true
+            grep -v "Last updated:" index.html.backup > index.html.backup.clean || true
+            
+            if ! diff -q index.html.clean index.html.backup.clean > /dev/null 2>&1; then
+              echo "meaningful_changes=true" >> $GITHUB_OUTPUT
+            else
+              echo "meaningful_changes=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "meaningful_changes=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Pull latest changes
+        if: steps.changes.outputs.meaningful_changes == 'true'
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git pull --rebase origin ${{ github.ref_name }}
+
+      - name: Commit and push changes
+        if: steps.changes.outputs.meaningful_changes == 'true'
+        run: |
           git add index.html
-          # Commit only if there are changes
           if ! git diff --staged --quiet; then
-            git commit -m "Automated dashboard update"
-            git push
+            git commit -m "Automated dashboard update - $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            
+            # Enhanced retry logic for high-frequency updates
+            for i in {1..5}; do
+              if git push; then
+                echo "Successfully pushed changes"
+                break
+              else
+                echo "Push failed, attempt $i/5"
+                if [ $i -eq 5 ]; then
+                  echo "Failed to push after 5 attempts"
+                  exit 1
+                fi
+                # Exponential backoff for high frequency
+                sleep $((i * 3))
+                git pull --rebase origin ${{ github.ref_name }}
+              fi
+            done
           else
-            echo "No changes to commit."
+            echo "No changes to commit after rebase."
           fi
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Dashboard update failed. Check the workflow logs."
+          # You could add Slack/Discord notifications here
