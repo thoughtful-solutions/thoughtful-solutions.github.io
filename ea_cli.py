@@ -3,7 +3,7 @@ import typer
 import yaml
 import re
 from pathlib import Path
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Set
 import textwrap
 
 # --- Configuration ---
@@ -97,12 +97,92 @@ def get_artifact_path(path_str: str) -> Optional[Path]:
     except (ValueError, KeyError):
         return None
 
+def build_reverse_link_map(root_dir: Path) -> Dict[str, List[str]]:
+    """Scans all spec files to build a map of incoming links for each artifact."""
+    reverse_map = {}
+    for source_config in ARTIFACT_CONFIG.values():
+        source_dir = root_dir / source_config['dir']
+        if not source_dir.exists():
+            continue
+        spec_data = load_spec(source_dir)
+        for source_filename, metadata in spec_data.items():
+            if source_filename == '__config__':
+                continue
+            source_path_str = str((source_dir / source_filename).as_posix())
+            for key, links in metadata.items():
+                if key != 'moscow' and isinstance(links, list):
+                    for target_path_str in links:
+                        reverse_map.setdefault(target_path_str, []).append(source_path_str)
+    return reverse_map
+
+# --- Visualization Helper Functions ---
+def _traverse_graph(start_path: Path, max_depth: int, current_depth: int = 0) -> Dict:
+    """Recursively traverses the artifact graph to build a tree for visualization."""
+    if current_depth >= max_depth or not start_path.exists():
+        return {}
+
+    spec = load_spec(start_path.parent)
+    metadata = spec.get(start_path.name, {})
+    
+    node = {"children": {}}
+    for rel_name, links in metadata.items():
+        if rel_name == 'moscow' or not isinstance(links, list):
+            continue
+        
+        child_nodes = {}
+        for link_path_str in links:
+            child_path = Path(link_path_str)
+            child_nodes[link_path_str] = _traverse_graph(child_path, max_depth, current_depth + 1)
+        
+        if child_nodes:
+            node["children"][rel_name] = child_nodes
+            
+    return node
+
+def _generate_mermaid_output(start_path: Path, graph: Dict, nodes_seen: Set) -> str:
+    """Recursively generates Mermaid flowchart syntax from the graph."""
+    output = []
+    start_path_str = start_path.as_posix()
+    start_id = re.sub(r'[^a-zA-Z0-9]', '', start_path_str)
+    start_type = start_path.parent.name.rstrip('s')
+
+    if start_path_str not in nodes_seen:
+        nodes_seen.add(start_path_str)
+        output.append(f'    {start_id}["<b>{start_path.name}</b>"]:::artifact_{start_type};')
+
+    for rel_name, children in graph.get("children", {}).items():
+        rel_text = rel_name.replace("_", " ").title()
+        for child_path_str, child_graph in children.items():
+            child_path = Path(child_path_str)
+            child_id = re.sub(r'[^a-zA-Z0-9]', '', child_path_str)
+            output.append(f'    {start_id} -- {rel_text} --> {child_id};')
+            output.append(_generate_mermaid_output(child_path, child_graph, nodes_seen))
+            
+    return "\n".join(filter(None, output))
+
+def _generate_markdown_output(start_path: Path, graph: Dict, indent_level: int = 0) -> str:
+    """Recursively generates a Markdown nested list from the graph."""
+    indent = "    " * indent_level
+    # For markdown links, relative paths are more robust
+    relative_path = Path(start_path.parent.name) / start_path.name
+    output = [f'{indent}* **{start_path.parent.name.rstrip("s").title()}:** [{start_path.name}]({relative_path.as_posix()})']
+    
+    for rel_name, children in graph.get("children", {}).items():
+        rel_text = rel_name.replace("_", " ").title()
+        output.append(f'{indent}    * *{rel_text}:*')
+        for child_path_str, child_graph in children.items():
+            # For nested items, the path needs to be adjusted to be relative from the CWD
+            child_path = Path(child_path_str)
+            output.append(_generate_markdown_output(child_path, child_graph, indent_level + 2))
+            
+    return "\n".join(output)
+
 # --- CRUD and Linkage Commands ---
 
 @app.command()
 def init(root_dir: Path = typer.Argument(Path("."), help="The root directory for the EA repository.")):
     """
-    Initializes a populated repository with sample Principles, Rules, and Domains.
+    Initializes a populated repository with sample Principles, Rules, Domains, and their linkages.
     """
     typer.secho(f"Initializing full EA repository in '{root_dir.resolve()}'...", fg=typer.colors.CYAN)
     root_dir.mkdir(exist_ok=True)
@@ -118,17 +198,25 @@ def init(root_dir: Path = typer.Argument(Path("."), help="The root directory for
         "Resiliency": "Capable of recovery from effects of adversity"
     }
     RULES = {
-        "Reproducible": "One of the main principles of scientific method, and refers to the ability to accurately reproduce, or replicate, by an independent body what has been performed. The driving thought behind this idea, is recorded and automated methods of provisioning so that any appropriately skilled person can gain the same results for a particular task performed.",
-        "Modular": "Designed with standardised units, for easy assembly and repair or flexible arrangement and use. The driving thought behind this idea, is the consistent use of the same devices, techniques and procedures with clearly defined interfaces throughout the environment, so increasing the uniformity of the implementation.",
-        "Manageable": "The ability to gather information about the state of environment and control it from a central point, and changes recorded in a manner in which they can be undone. The driving thought behind this is that of centralised control, single points of change and reporting and good version control.",
-        "Scaleable": "The ability meet appropriate demands of the systems without changing the architecture of the environment, with maximum re-use of the modules already provisioned with the environment. It must be possible for the system to scale both up and down according to need.",
-        "Available": "The ability for resources to be accessible and usable upon demand by appropriate users or other resources. Also the capability to recover from unexpected actions upon the resources in a timely and consistent manner.",
-        "Auditable": "The ability to enquire about what has been provisioned, its configuration and usage in a timely and accurate manner.",
-        "Secure": "The environment should be provision in such a manner that it should be protected against corruption or loss. Additionally, that the resources should be presented to only authorised parties or resources."
+        "Reproducible": "One of the main principles of scientific method...",
+        "Modular": "Designed with standardised units...",
+        "Manageable": "The ability to gather information about the state of environment...",
+        "Scaleable": "The ability meet appropriate demands of the systems...",
+        "Available": "The ability for resources to be accessible and usable upon demand...",
+        "Auditable": "The ability to enquire about what has been provisioned...",
+        "Secure": "The environment should be provision in such a manner that it should be protected..."
     }
-    DOMAINS = ["Business Architecture", "Data Architecture", "Application Architecture", "Technology Architecture"]
+    DOMAINS = {
+        "Business Architecture": "Focuses on business strategy, governance, and key processes.",
+        "Data Architecture": "Concerned with the structure of an organization's logical and physical data assets.",
+        "Application Architecture": "Provides a blueprint for the individual applications to be deployed.",
+        "Technology Architecture": "Describes the logical software and hardware capabilities."
+    }
     
-    # --- Directory and Spec File Creation ---
+    # --- Store generated filenames for later linkage ---
+    generated_files = {"principle": {}, "rule": {}, "domain": {}}
+
+    # --- Phase 1: Directory and File Creation ---
     for artifact_type, config in ARTIFACT_CONFIG.items():
         dir_path = root_dir / config['dir']
         dir_path.mkdir(exist_ok=True)
@@ -136,73 +224,105 @@ def init(root_dir: Path = typer.Argument(Path("."), help="The root directory for
         
         typer.echo(f"\n--- Setting up '{dir_path}' ---")
         
-        # DOMAINS SETUP
         if artifact_type == "domain":
             spec_data = yaml.safe_load(textwrap.dedent("""\
                 __config__:
                   template: |
                     # {prefix}: {title}
-
+                    
                     ## Purpose
-                    - <...>
+                    - {description}
 
                     ## Scope
                     - <...>
 
                     ## Stakeholders
                     - <...>
-                  validation_rules:
-                    must_have_title:
-                      description: "Document must have a level 1 Markdown title."
-                      pattern: "^# .+"
-                    must_have_purpose:
-                      description: "Document must have a 'Purpose' section with at least one bullet point."
-                      pattern: "(?s)## Purpose\\\\s*\\\\n\\\\s*- .+"
-                    must_have_scope:
-                      description: "Document must have a 'Scope' section with at least one bullet point."
-                      pattern: "(?s)## Scope\\\\s*\\\\n\\\\s*- .+"
-                    must_have_stakeholders:
-                      description: "Document must have a 'Stakeholders' section with at least one bullet point."
-                      pattern: "(?s)## Stakeholders\\\\s*\\\\n\\\\s*- .+"
             """))
             template = spec_data['__config__']['template']
-            for title in DOMAINS:
+            for title, description in DOMAINS.items():
                 filename = generate_filename(dir_path, config['prefix'], title)
+                generated_files[artifact_type][title] = filename
                 filepath = dir_path / filename
-                filepath.write_text(template.format(prefix=config['prefix'], title=title))
+                filepath.write_text(template.format(prefix=config['prefix'], title=title, description=description))
                 spec_data[filename] = {'moscow': 'Should', 'governed_by_principles': []}
                 typer.echo(f"  Created Domain: {filename}")
             save_spec(dir_path, spec_data)
 
-        # PRINCIPLES SETUP
         elif artifact_type == "principle":
             spec_data = {}
             for title, description in PRINCIPLES.items():
                 filename = generate_filename(dir_path, config['prefix'], title)
+                generated_files[artifact_type][title] = filename
                 filepath = dir_path / filename
                 content = f"# {config['prefix']}: {title}\n\n{description}"
-                filepath.write_text(content)
+                filepath.write_text(content, encoding='utf-8')
                 spec_data[filename] = {'moscow': 'Should', 'supported_by_rules': [], 'verified_by': []}
                 typer.echo(f"  Created Principle: {filename}")
             save_spec(dir_path, spec_data)
 
-        # RULES SETUP
         elif artifact_type == "rule":
             spec_data = {}
             for title, description in RULES.items():
                 filename = generate_filename(dir_path, config['prefix'], title)
+                generated_files[artifact_type][title] = filename
                 filepath = dir_path / filename
                 content = f"# {config['prefix']}: {title}\n\n{description}"
-                filepath.write_text(content)
+                filepath.write_text(content, encoding='utf-8')
                 spec_data[filename] = {'moscow': 'Should', 'supports_principles': [], 'verified_by': []}
                 typer.echo(f"  Created Rule: {filename}")
             save_spec(dir_path, spec_data)
 
-        # VERIFICATIONS SETUP (and any other types)
-        else:
+        else: # Handle verifications and other types
             if not spec_path.exists() or spec_path.stat().st_size == 0:
                 spec_path.touch()
-                typer.echo(f"  Created empty spec file: {spec_path}")
+
+    # --- Phase 2: Linkage Creation ---
+    typer.echo("\n--- Creating linkages between artifacts ---")
+
+    # Define which Principles govern which Domains
+    domain_principle_links = {
+        "Business Architecture": ["Agility", "Efficiency", "Simplicity"],
+        "Data Architecture": ["Uniformity", "Proven"],
+        "Application Architecture": ["Simplicity", "Agility"],
+        "Technology Architecture": ["Resiliency", "Supportable", "Proven"]
+    }
+    
+    domain_dir = root_dir / ARTIFACT_CONFIG['domain']['dir']
+    domain_spec = load_spec(domain_dir)
+    for domain_title, principle_titles in domain_principle_links.items():
+        domain_filename = generated_files['domain'].get(domain_title)
+        if domain_filename:
+            principle_paths = [
+                str(Path(ARTIFACT_CONFIG['principle']['dir']) / generated_files['principle'][p_title]).replace('\\', '/')
+                for p_title in principle_titles if p_title in generated_files['principle']
+            ]
+            domain_spec[domain_filename]['governed_by_principles'] = principle_paths
+    save_spec(domain_dir, domain_spec)
+    typer.echo("  Linked Principles to Domains.")
+
+    # Define which Rules support which Principles
+    principle_rule_links = {
+        "Simplicity": ["Modular"],
+        "Uniformity": ["Modular", "Reproducible"],
+        "Agility": ["Scaleable", "Modular"],
+        "Efficiency": ["Manageable", "Reproducible"],
+        "Resiliency": ["Available", "Secure"],
+        "Supportable": ["Manageable"]
+    }
+
+    principle_dir = root_dir / ARTIFACT_CONFIG['principle']['dir']
+    principle_spec = load_spec(principle_dir)
+    for principle_title, rule_titles in principle_rule_links.items():
+        principle_filename = generated_files['principle'].get(principle_title)
+        if principle_filename:
+            rule_paths = [
+                str(Path(ARTIFACT_CONFIG['rule']['dir']) / generated_files['rule'][r_title]).replace('\\', '/')
+                for r_title in rule_titles if r_title in generated_files['rule']
+            ]
+            principle_spec[principle_filename]['supported_by_rules'] = rule_paths
+    save_spec(principle_dir, principle_spec)
+    typer.echo("  Linked Rules to Principles.")
 
     typer.secho("\nInitialization complete. ✅", fg=typer.colors.GREEN)
 
@@ -234,7 +354,7 @@ def create(
     # Check for a custom template in the spec's __config__ section
     template = spec_data.get('__config__', {}).get('template')
     if template:
-        template = template.format(prefix=config['prefix'], title=title)
+        template = template.format(prefix=config['prefix'], title=title, description="<...>")
     else: # Fallback to default generic template
         template = f"# {config['prefix']}: {title}\n\n(Description of the {artifact_type} goes here.)\n"
         if artifact_type == "verification":
@@ -253,7 +373,7 @@ def create(
                     Then ...
                 ```
                 """)
-    filepath.write_text(template)
+    filepath.write_text(template, encoding='utf-8')
     
     # Update the spec.yaml
     spec_data[filename] = { "moscow": moscow_val }
@@ -271,7 +391,7 @@ def list_artifacts(
     artifact_type: str = typer.Argument(..., help=f"Type of artifact to list. Options: {list(ARTIFACT_CONFIG.keys())}", case_sensitive=False)
 ):
     """
-    Lists all artifacts of a given type, showing their priority and filename.
+    Lists all artifacts of a given type, showing priority and linkage counts.
     """
     config = get_artifact_config(artifact_type)
     artifact_dir = Path(config['dir'])
@@ -289,14 +409,28 @@ def list_artifacts(
         typer.echo(f"No {artifact_type}s found in '{artifact_dir}'.")
         return
 
-    # Basic table layout
-    header = f"{'MOSCOW':<8}| FILENAME"
+    # Build a reverse-lookup map of all incoming links in the repository
+    reverse_link_map = build_reverse_link_map(Path("."))
+
+    # Table layout with linkages
+    header = f"{'MOSCOW':<8}| {'LINKS TO':<10}| {'LINKED FROM':<12}| FILENAME"
     typer.secho(header, bold=True)
     typer.secho("-" * (len(header) + 20), bold=True)
 
     for filename, metadata in sorted(artifact_entries.items()):
         moscow = metadata.get('moscow', 'N/A')
-        typer.echo(f"{moscow:<8}| {filename}")
+
+        # Calculate outgoing links (links from this artifact)
+        outgoing_links = 0
+        for key, value in metadata.items():
+            if key != 'moscow' and isinstance(value, list):
+                outgoing_links += len(value)
+
+        # Calculate incoming links (links to this artifact)
+        full_path_str = str((artifact_dir / filename).as_posix())
+        incoming_links = len(reverse_link_map.get(full_path_str, []))
+        
+        typer.echo(f"{moscow:<8}| {outgoing_links:<10}| {incoming_links:<12}| {filename}")
 
 
 @app.command()
@@ -510,6 +644,81 @@ def unlink(
     else:
         typer.secho(f"Link from '{source}' to '{target}' not found. No changes made.", fg=typer.colors.YELLOW)
 
+@app.command()
+def visualize(
+    artifact_path_str: Optional[str] = typer.Argument(None, help="Path of the starting artifact (e.g., 'domains/D-001...md')."),
+    artifact_type: Optional[str] = typer.Option(None, "--type", "-t", help="Visualize all artifacts of a specific type (e.g., 'domain') or 'all'."),
+    format: str = typer.Option("mermaid", "--format", "-f", help="Output format: 'mermaid' or 'markdown'"),
+    depth: int = typer.Option(3, "--depth", "-d", help="How many levels of relationships to show.")
+):
+    """
+    Generates a relationship visualization for a specific artifact, a type, or all artifacts.
+    """
+    if not artifact_path_str and not artifact_type:
+        typer.secho("Error: You must provide an artifact path OR an artifact type using --type (e.g., --type domain or --type all).", fg=typer.colors.RED)
+        raise typer.Exit(1)
+
+    start_paths = []
+    if artifact_path_str:
+        start_path = get_artifact_path(artifact_path_str)
+        if not start_path or not start_path.exists():
+            typer.secho(f"Error: Artifact '{artifact_path_str}' not found.", fg=typer.colors.RED)
+            raise typer.Exit(1)
+        start_paths.append(start_path)
+    
+    elif artifact_type:
+        if artifact_type.lower() == 'all':
+            # For 'all', we typically want to start from the top-level (domains)
+            # and traverse down. This makes the graph more readable.
+            config = get_artifact_config('domain')
+            dir_path = Path(config['dir'])
+            if dir_path.exists():
+                start_paths.extend(sorted(dir_path.glob("*.md")))
+        else:
+            config = get_artifact_config(artifact_type)
+            dir_path = Path(config['dir'])
+            if dir_path.exists():
+                start_paths.extend(sorted(dir_path.glob("*.md")))
+
+    if not start_paths:
+        typer.secho("No artifacts found to visualize.", fg=typer.colors.YELLOW)
+        raise typer.Exit()
+
+    # Build a traversable graph for each starting path
+    graphs = {path: _traverse_graph(path, depth) for path in start_paths}
+
+    # --- Generate Output ---
+    if format.lower() == "mermaid":
+        header = textwrap.dedent("""\
+            ```mermaid
+            graph TD;
+                %% --- Define Node Styles ---
+                classDef artifact_domain fill:#87CEEB,stroke:#333,stroke-width:2px;
+                classDef artifact_principle fill:#98FB98,stroke:#333,stroke-width:2px;
+                classDef artifact_rule fill:#FFDAB9,stroke:#333,stroke-width:2px;
+                classDef artifact_verification fill:#D8BFD8,stroke:#333,stroke-width:2px;
+
+                %% --- Define Nodes & Links ---
+            """)
+        footer = "```"
+        
+        # Use a single nodes_seen set to avoid defining nodes more than once
+        nodes_seen = set()
+        mermaid_bodies = [_generate_mermaid_output(path, graph, nodes_seen) for path, graph in graphs.items()]
+        # Join bodies and filter out empty strings
+        full_body = "\n".join(filter(None, mermaid_bodies))
+        output = f"{header}{full_body}\n{footer}"
+    
+    elif format.lower() == "markdown":
+        markdown_outputs = [_generate_markdown_output(path, graph) for path, graph in graphs.items()]
+        output = "\n\n---\n\n".join(markdown_outputs)
+
+    else:
+        typer.secho(f"Error: Invalid format '{format}'. Choose 'mermaid' or 'markdown'.", fg=typer.colors.RED)
+        raise typer.Exit(1)
+
+    typer.echo(output)
+    
 # --- Validation Functions ---
 def validate_content_with_rules(filepath: Path, rules: Dict) -> List[str]:
     """
