@@ -237,13 +237,13 @@ For detailed help on any command, use the ```--help``` flag. Example:
 
  A CLI tool to manage Enterprise Architecture artifacts (Principles, Rules, etc.)
 
-╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────╮
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ --extract-gherkin             Extract Gherkin feature files from all verifications and exits.                   │
 │ --install-completion          Install completion for the current shell.                                         │
 │ --show-completion             Show completion for the current shell, to copy it or customize the installation.  │
 │ --help                        Show this message and exit.                                                       │
-╰────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────╮
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ init        Initializes a populated repository with sample Principles, Rules, Domains, and their linkages.      │
 │ create      Creates a new EA artifact markdown file and registers it in the spec.                               │
 │ list        Lists all artifacts of a given type, showing priority and linkage counts.                           │
@@ -254,6 +254,6 @@ For detailed help on any command, use the ```--help``` flag. Example:
 │ unlink      Removes a link between two EA artifacts.                                                            │
 │ visualize   Generates a relationship visualization for a specific artifact, a type, or all artifacts.           │
 │ validate    Tools to validate the compliance and integrity of EA artifacts.                                     │
-╰────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```
