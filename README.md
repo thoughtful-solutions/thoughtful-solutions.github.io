@@ -61,9 +61,10 @@ Feature: Verification for Simplicity Principle (AP-001)
   So that the architecture remains simple and easy to understand.
 
   Scenario: Count the number of active architectural rules  
-    Given I have access to the architecture repository  
-    When I count the number of files in the 'rules' directory  
-    Then the total number should be less than 10
+    GIVEN I have access to the architecture repository  
+    WHEN I count the number of files in the 'rules' directory  
+    THEN the total number should be less than 10
+
 ```
 
 ### **Step 4: Link the Verification to the Principle**
@@ -74,7 +75,7 @@ Now, we need to formally link our new verification to the "Simplicity" principle
 ```
 **Output:**
 ```
-Successfully linked 'principles/AP-001-simplicity.md' to 'verifications/V-001-...' (relation: verified\_by). 🔗
+Successfully linked 'principles/AP-001-simplicity.md' to 'verifications/V-001-...' (relation: verified\_by). 
 ```
 ### **Step 5: Confirm the Linkage**
 

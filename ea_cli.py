@@ -2,6 +2,7 @@
 import typer
 import yaml
 import re
+import shutil
 from pathlib import Path
 from typing import List, Optional, Dict, Set
 import textwrap
@@ -42,6 +43,71 @@ validate_app = typer.Typer(
     help="Tools to validate the compliance and integrity of EA artifacts."
 )
 app.add_typer(validate_app, name="validate")
+
+
+# --- Callback for --extract-gherkin option ---
+def _extract_gherkin_callback(value: bool):
+    """
+    Callback function for the --extract-gherkin flag.
+    If the flag is present, this function runs and the program exits.
+    """
+    if not value:
+        return
+
+    gherkin_dir = Path("gherkin")
+    verifications_dir = Path(ARTIFACT_CONFIG['verification']['dir'])
+
+    typer.secho("--- Starting Gherkin Extraction ---", fg=typer.colors.CYAN, bold=True)
+
+    # 1. Delete existing gherkin directory
+    if gherkin_dir.exists():
+        shutil.rmtree(gherkin_dir)
+        typer.echo(f"Removed existing directory: '{gherkin_dir}'")
+
+    # 2. Create a new gherkin directory
+    gherkin_dir.mkdir()
+    typer.echo(f"Created new directory: '{gherkin_dir}'")
+
+    # 3. Check if verifications directory exists
+    if not verifications_dir.exists() or not any(verifications_dir.iterdir()):
+        typer.secho(f"Verification directory '{verifications_dir}' is missing or empty. No files to extract.", fg=typer.colors.YELLOW)
+        raise typer.Exit()
+
+    # 4. Iterate through verification files and extract Gherkin content
+    extraction_count = 0
+    verification_files = list(verifications_dir.glob("*.md"))
+
+    for md_file in verification_files:
+        content = md_file.read_text(encoding='utf-8')
+        # Regex to find a gherkin block and capture its content, ignoring the markers
+        match = re.search(r"```gherkin\s*\n(.*?)\n```", content, re.DOTALL)
+        if match:
+            gherkin_content = match.group(1).strip()
+            # Create a new filename with a .gherkin extension
+            new_filename = md_file.stem + ".gherkin"
+            new_filepath = gherkin_dir / new_filename
+            new_filepath.write_text(gherkin_content, encoding='utf-8')
+            typer.echo(f"  Extracted '{md_file.name}' -> '{new_filepath}'")
+            extraction_count += 1
+
+    typer.secho(f"\nExtraction complete. Processed {len(verification_files)} files and extracted {extraction_count} Gherkin features. ✅", fg=typer.colors.GREEN)
+    raise typer.Exit()
+
+
+@app.callback()
+def main(
+    extract_gherkin: bool = typer.Option(
+        None,
+        "--extract-gherkin",
+        help="Extract Gherkin feature files from all verifications and exits.",
+        callback=_extract_gherkin_callback,
+        is_eager=True, # Ensures this option runs before any command
+    ),
+):
+    """
+    Manage Enterprise Architecture artifacts using the commands below.
+    """
+    pass
 
 
 # --- Helper Functions ---
@@ -238,6 +304,10 @@ def init(root_dir: Path = typer.Argument(Path("."), help="The root directory for
 
                     ## Stakeholders
                     - <...>
+                  validation_rules:
+                    purpose_exists:
+                      description: "The '## Purpose' section must contain at least one bullet point."
+                      pattern: '## Purpose\\n\\n- .+'
             """))
             template = spec_data['__config__']['template']
             for title, description in DOMAINS.items():
@@ -668,12 +738,10 @@ def visualize(
     
     elif artifact_type:
         if artifact_type.lower() == 'all':
-            # For 'all', we typically want to start from the top-level (domains)
-            # and traverse down. This makes the graph more readable.
-            config = get_artifact_config('domain')
-            dir_path = Path(config['dir'])
-            if dir_path.exists():
-                start_paths.extend(sorted(dir_path.glob("*.md")))
+            for config in ARTIFACT_CONFIG.values():
+                dir_path = Path(config['dir'])
+                if dir_path.exists():
+                    start_paths.extend(sorted(dir_path.glob("*.md")))
         else:
             config = get_artifact_config(artifact_type)
             dir_path = Path(config['dir'])
@@ -705,9 +773,7 @@ def visualize(
         # Use a single nodes_seen set to avoid defining nodes more than once
         nodes_seen = set()
         mermaid_bodies = [_generate_mermaid_output(path, graph, nodes_seen) for path, graph in graphs.items()]
-        # Join bodies and filter out empty strings
-        full_body = "\n".join(filter(None, mermaid_bodies))
-        output = f"{header}{full_body}\n{footer}"
+        output = f"{header}{''.join(mermaid_bodies)}\n{footer}"
     
     elif format.lower() == "markdown":
         markdown_outputs = [_generate_markdown_output(path, graph) for path, graph in graphs.items()]
