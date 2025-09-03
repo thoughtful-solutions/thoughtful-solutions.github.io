@@ -1,363 +1,486 @@
+#!/usr/bin/env python3
+"""
+Gherkin Test Runner with Cross-Platform Support
+Executes Gherkin feature files using shell script implementations.
+Handles line ending issues and works on both Windows and Linux.
+"""
+
 import re
 import os
 import sys
+import shutil
 import subprocess
-import argparse
-import glob
 import json
-import shutil 
+import argparse
+from pathlib import Path
 from gherkin.parser import Parser
 
-# ANSI color codes for terminal output
-class colors:
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    OKCYAN = '\033[96m'
-    OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
+class Colors:
+    """ANSI color codes for terminal output"""
+    GREEN = '\033[92m'
+    RED = '\033[91m'
+    YELLOW = '\033[93m'
+    BLUE = '\033[94m'
+    MAGENTA = '\033[95m'
+    CYAN = '\033[96m'
     BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
+    RESET = '\033[0m'
 
-def print_color(text, color, quiet=False):
-    """Prints text in a given color, unless in quiet mode."""
-    if not quiet:
-        print(f"{color}{text}{colors.ENDC}")
 
-def parse_implementation_files(implementation_files, quiet=False):
+def normalize_line_endings(text):
     """
-    Parses the implementation files to extract step implementations.
-    The files can be any text file (e.g., .gherkin) as long as they contain IMPLEMENTS blocks.
-
-    Args:
-        implementation_files (list): A list of paths to implementation files.
-        quiet (bool): Suppress warning messages.
-
-    Returns:
-        list: A list of dictionaries, each representing a step implementation
-              with its regex pattern and shell script.
+    Normalize line endings to Unix format (LF only).
+    This removes Windows CRLF issues that cause bash parsing errors.
     """
-    implementations = []
-    implementation_pattern = re.compile(r"^\s*IMPLEMENTS\s+(.+)$")
+    if text is None:
+        return ""
+    # Replace CRLF with LF, then ensure no stray CR characters remain
+    return text.replace('\r\n', '\n').replace('\r', '\n')
 
-    for file_path in implementation_files:
-        if not os.path.exists(file_path):
-            print_color(f"Warning: Implementation file not found: {file_path}", colors.WARNING, quiet=quiet)
-            continue
-            
-        with open(file_path, 'r') as f:
-            lines = f.readlines()
-            
-        current_script = []
-        in_implementation_block = False
+
+def clean_script_content(script_content):
+    """
+    Clean, prepare, and strip shebang from script content for execution.
+    """
+    if not script_content:
+        return ""
+    
+    cleaned = normalize_line_endings(script_content)
+    lines = cleaned.split('\n')
+
+    # Strip shebang if present, as the runner calls bash explicitly
+    if lines and lines[0].strip().startswith("#!"):
+        lines.pop(0)
+    
+    # Remove trailing whitespace from each line while preserving structure
+    cleaned_lines = [line.rstrip() for line in lines]
+    
+    return '\n'.join(cleaned_lines)
+
+
+def print_colored(text, color='', end='\n', file=sys.stdout):
+    """Print text with color if supported to the specified file stream."""
+    # Check if we're in a terminal that supports colors for the given file stream
+    if hasattr(file, 'isatty') and file.isatty():
+        print(f"{color}{text}{Colors.RESET}", end=end, file=file)
+    else:
+        print(text, end=end, file=file)
+
+
+def find_bash_executable():
+    """
+    Find a suitable bash executable, prioritizing native Windows shells (like Git Bash)
+    over WSL to ensure consistent behavior and environment.
+    """
+    # On non-Windows systems, 'bash' in the PATH is almost always the right choice.
+    if sys.platform != "win32":
+        return 'bash'
+
+    # --- On Windows, find a native bash, avoiding WSL ---
+
+    # 1. Best Method: Find bash relative to git.exe in the PATH.
+    # This works reliably with standard installers, Scoop, Chocolatey, etc.
+    git_path = shutil.which('git')
+    if git_path:
+        # The bash.exe for Git is in the same directory as git.exe
+        bash_path = os.path.join(os.path.dirname(git_path), 'bash.exe')
+        if os.path.exists(bash_path):
+            return bash_path
+
+    # 2. Fallback: Check common hardcoded installation paths for Git Bash.
+    possible_paths = [
+        os.path.join(os.environ.get("ProgramFiles", "C:\\Program Files"), "Git", "bin", "bash.exe"),
+        os.path.join(os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)"), "Git", "bin", "bash.exe"),
+    ]
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        possible_paths.append(os.path.join(local_app_data, "Programs", "Git", "bin", "bash.exe"))
+
+    for path in possible_paths:
+        if os.path.exists(path):
+            return path
+
+    # 3. Last Resort: Check if 'bash' is in the PATH and verify it's not WSL.
+    bash_in_path = shutil.which('bash')
+    if bash_in_path:
+        try:
+            # `uname -o` identifies the OS. Git Bash (Msys) -> 'Msys', WSL -> 'GNU/Linux'.
+            result = subprocess.run(
+                [bash_in_path, '-c', 'uname -o'],
+                capture_output=True, text=True, timeout=3, encoding='utf-8'
+            )
+            if result.returncode == 0 and 'linux' not in result.stdout.lower():
+                return bash_in_path
+        except (subprocess.TimeoutExpired, OSError):
+            # Command failed or timed out, so we can't trust this bash.
+            pass
+
+    # 4. Failure: If we've reached this point, no suitable bash was found.
+    print_colored("ERROR: A suitable non-WSL bash executable was not found.", Colors.RED, file=sys.stderr)
+    print_colored("Please install Git for Windows (https://git-scm.com/downloads) and ensure its 'bin' directory is in your system's PATH.", Colors.YELLOW, file=sys.stderr)
+    sys.exit(1)
+
+
+def execute_shell_script(script_content, variables=None, context=None, debug=False, timeout=60):
+    """
+    Execute a shell script, passing variables via the environment for robustness.
+    """
+    if variables is None:
+        variables = {}
+    if context is None:
+        context = {}
+
+    cleaned_script = clean_script_content(script_content)
+
+    if not cleaned_script.strip():
+        return subprocess.CompletedProcess(
+            args=['bash'], returncode=1, stdout='', stderr='Empty script content'
+        )
+
+    bash_executable = find_bash_executable()
+    
+    try:
+        # Pass variables via the environment, which is robust and avoids quoting issues.
+        script_env = os.environ.copy()
+        all_vars = {**context, **variables}
         
-        current_pattern_str = None
+        # Add all variables to the environment as strings
+        for key, value in all_vars.items():
+            script_env[key] = str(value)
 
-        for i, line in enumerate(lines):
-            match = implementation_pattern.match(line)
+        command = [bash_executable, '-c', cleaned_script]
+
+        if debug:
+            print("--- DEBUG: Variables passed to script (as environment) ---")
+            print(json.dumps(all_vars, indent=2) if all_vars else "None")
+            print(f"--- DEBUG: Using bash executable: {bash_executable} ---")
+            print("--- DEBUG: Executing script ---")
+            print(cleaned_script)
+            print("------------------------------------------")
+
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            encoding='utf-8',
+            env=script_env  # Pass the constructed environment here
+        )
             
-            if (match or i == len(lines) - 1) and in_implementation_block and current_script:
-                if i == len(lines) - 1 and not match and line.strip() != '':
-                     current_script.append(line)
+        if debug:
+            print(f"--- DEBUG: Result (Exit Code: {result.returncode}) ---")
+            if result.stdout and result.stdout.strip():
+                print(f"  stdout:\n{result.stdout}")
+            if result.stderr and result.stderr.strip():
+                print(f"  stderr:\n{result.stderr}")
+            print("---------------------------------")
+            
+        return result
+            
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(
+            args=[bash_executable, '-c', '...'], 
+            returncode=124, 
+            stdout='', 
+            stderr=f'Script execution timed out after {timeout} seconds'
+        )
+    except Exception as e:
+        return subprocess.CompletedProcess(
+            args=[bash_executable, '-c', '...'], 
+            returncode=1, 
+            stdout='', 
+            stderr=f'Error executing script: {str(e)}'
+        )
 
-                if current_pattern_str:
-                    pattern = re.sub(r"'([^']*)'", r"'(.*?)'", current_pattern_str)
-                    implementations.append({
-                        'pattern': re.compile(pattern),
-                        'script': "".join(current_script)
-                    })
-                current_script = []
-                in_implementation_block = False
 
-            if match:
-                in_implementation_block = True
-                current_pattern_str = match.group(1).strip()
-                current_script = []
-            elif in_implementation_block and line.strip() != "":
-                current_script.append(line)
+def load_implementation_file(file_path, debug=False):
+    """
+    Load implementation file with automatic line ending normalization.
+    """
+    implementations = {}
+    
+    try:
+        with open(file_path, 'r', encoding='utf-8', newline=None) as f:
+            content = f.read()
+        
+        content = normalize_line_endings(content)
+        
+        if debug:
+            print(f"Loading implementations from: {file_path}")
+        
+        implements_pattern = r'^IMPLEMENTS\s+(.+?)$'
+        lines = content.split('\n')
+        
+        current_step = None
+        current_script = []
+        
+        for line in lines:
+            implements_match = re.match(implements_pattern, line.strip())
+            
+            if implements_match:
+                if current_step and current_script:
+                    script_content = '\n'.join(current_script)
+                    implementations[current_step] = clean_script_content(script_content)
                 
+                current_step = implements_match.group(1).strip()
+                current_script = []
+            elif current_step is not None:
+                current_script.append(line)
+        
+        if current_step and current_script:
+            script_content = '\n'.join(current_script)
+            implementations[current_step] = clean_script_content(script_content)
+        
+        if debug:
+            print(f"Found {len(implementations)} implementations")
+            for step_pattern in implementations.keys():
+                print(f"  - {step_pattern}")
+            
+    except Exception as e:
+        print(f"Error loading implementation file {file_path}: {str(e)}")
+    
     return implementations
 
-def find_implementation(step, implementations):
+
+def find_implementation_files(impl_dir, debug=False):
     """
-    Finds a matching implementation for a given Gherkin step.
-
-    Args:
-        step (dict): The Gherkin step object.
-        implementations (list): The list of available step implementations.
-
-    Returns:
-        tuple: A tuple containing the matched implementation and the regex match groups,
-               or (None, None) if no match is found.
+    Find all implementation files in the specified directory.
     """
-    step_text = f"{step['keyword'].strip()} {step['text'].strip()}"
-    for impl in implementations:
-        match = impl['pattern'].match(step_text)
-        if match:
-            return impl, match.groups()
-    return None, None
-
-def execute_step(implementation, args, debug=False, quiet=False):
-    """
-    Executes the shell script for a step implementation.
-
-    Args:
-        implementation (dict): The step implementation dictionary.
-        args (tuple): The regex match groups to substitute into the script.
-        debug (bool): If True, prints detailed execution info.
-        quiet (bool): Suppress printed output.
-
-    Returns:
-        subprocess.CompletedProcess: The result of the subprocess run.
-    """
-    script_to_execute = implementation['script']
-    for i, arg in enumerate(args, 1):
-        script_to_execute = script_to_execute.replace(f"$MATCH_{i}", arg)
-
-    if debug:
-        print_color("--- DEBUG: Executing Script ---", colors.OKBLUE, quiet=quiet)
-        print_color(script_to_execute.strip(), colors.OKCYAN, quiet=quiet)
-        print_color("-------------------------------", colors.OKBLUE, quiet=quiet)
+    impl_dir = Path(impl_dir)
+    if not impl_dir.exists():
+        if debug:
+            print(f"Implementation directory does not exist: {impl_dir}")
+        return []
     
-    # MODIFIED: Run bash directly, passing the script via standard input.
-    # This is a more reliable method on Windows than using shell=True with executable='bash'.
-    bash_path = shutil.which('bash')
-    result = subprocess.run(
-        [bash_path],             # The command is the full path to bash
-        input=script_to_execute, # Pass the script string to stdin
-        shell=False,             # We are calling the executable directly
-        capture_output=True,
-        text=True
-    )
-
+    gherkin_files = list(impl_dir.glob('*.gherkin'))
+    
     if debug:
-        print_color(f"--- DEBUG: Result (Exit Code: {result.returncode}) ---", colors.OKBLUE, quiet=quiet)
-        if result.stdout.strip():
-            print_color("  stdout:", colors.HEADER, quiet=quiet)
-            print_color(result.stdout.strip(), colors.OKCYAN, quiet=quiet)
-        if result.stderr.strip():
-            print_color("  stderr:", colors.HEADER, quiet=quiet)
-            print_color(result.stderr.strip(), colors.FAIL, quiet=quiet)
-        print_color("---------------------------------", colors.OKBLUE, quiet=quiet)
+        print(f"Searching for implementation files in: {impl_dir.absolute()}")
+        print(f"Found {len(gherkin_files)} implementation file(s)")
+        for file in gherkin_files:
+            print(f"  - {file.name}")
+    
+    return [str(f) for f in gherkin_files]
+
+
+def load_all_implementations(impl_files, debug=False):
+    """
+    Load all implementation files and combine them into a single dictionary.
+    """
+    all_implementations = {}
+    
+    print(f"Loading implementations from {len(impl_files)} file(s)...")
+    
+    for impl_file in impl_files:
+        implementations = load_implementation_file(impl_file, debug)
         
-    return result
-
-def run_feature_file(feature_file_path, implementations, json_output=False, debug=False):
-    """
-    Parses and runs a .gherkin feature file.
-
-    Args:
-        feature_file_path (str): The path to the feature file.
-        implementations (list): The list of available step implementations.
-        json_output (bool): If True, returns a dict with results instead of printing.
-        debug (bool): If True, enables detailed execution logs for each step.
-
-    Returns:
-        tuple or dict: If json_output is True, returns a dictionary of results.
-                       Otherwise, returns a tuple of (scenarios_failed, steps_undefined).
-    """
-    stats = {
-        'scenarios': 0, 'scenarios_passed': 0, 'scenarios_failed': 0,
-        'steps': 0, 'passed': 0, 'failed': 0, 'skipped': 0, 'undefined': 0
-    }
+        for step_pattern, script in implementations.items():
+            if step_pattern in all_implementations:
+                print(f"{Colors.YELLOW}Warning: Duplicate implementation for step: {step_pattern}{Colors.RESET}")
+            all_implementations[step_pattern] = script
     
-    results_json = {
-        'feature': {},
-        'summary': {},
-        'scenarios': []
-    }
+    print(f"Found {len(all_implementations)} step implementations.")
+    return all_implementations
 
+
+def run_step(step_text, step_keyword, implementations, context=None, debug=False):
+    """
+    Run a single step by finding a matching implementation.
+    """
+    full_step_text = f"{step_keyword} {step_text}".strip()
+    
+    for pattern, script_content in implementations.items():
+        try:
+            # First, attempt to match against the raw step text (without keyword)
+            match = re.match(f"^{pattern}$", step_text, re.IGNORECASE)
+            
+            # If no match, try matching against the full text (with keyword)
+            if not match:
+                match = re.match(f"^{pattern}$", full_step_text, re.IGNORECASE)
+
+            if match:
+                variables = {}
+                for i, group in enumerate(match.groups(), 1):
+                    variables[f'MATCH_{i}'] = group if group is not None else ""
+                
+                result = execute_shell_script(script_content, variables, context, debug)
+                
+                return {
+                    'status': 'passed' if result.returncode == 0 else 'failed',
+                    'output': result.stderr if result.returncode != 0 and result.stderr.strip() else None,
+                    'stdout': result.stdout if result.stdout else None,
+                    'stderr': result.stderr if result.stderr else None,
+                    'exit_code': result.returncode
+                }
+                
+        except re.error as e:
+            if debug:
+                print(f"Invalid regex pattern '{pattern}': {e}")
+            continue
+    
+    return {'status': 'undefined', 'output': f'No implementation found for: {full_step_text}'}
+
+
+def run_gherkin_file(feature_file, implementations, debug=False, json_output=False):
+    """
+    Run a Gherkin feature file using the provided implementations.
+    """
     try:
-        with open(feature_file_path, 'r') as f:
-            feature_data = Parser().parse(f.read())
-    except FileNotFoundError:
-        print_color(f"Error: Feature file not found at '{feature_file_path}'", colors.FAIL, quiet=json_output)
-        if json_output:
-            return {'error': f"Feature file not found at '{feature_file_path}'"}
-        return 1, 0
-
-    feature = feature_data['feature']
-    
-    results_json['feature'] = {
-        'name': feature.get('name', 'Untitled Feature'),
-        'file': feature_file_path
-    }
-    
-    if not json_output:
-        print(f"\nFeature: {feature.get('name', 'Untitled Feature')}")
-
-    for scenario in feature.get('children', []):
-        if 'scenario' not in scenario: continue
-        scenario = scenario['scenario']
-
-        stats['scenarios'] += 1
-        scenario_failed = False
-        scenario_result_json = {
-            'name': scenario.get('name', 'Untitled Scenario'),
-            'status': 'passed',
-            'steps': []
-        }
-
-        if not json_output:
-            print(f"\n  Scenario: {scenario.get('name', 'Untitled Scenario')}")
-
-        for step in scenario.get('steps', []):
-            stats['steps'] += 1
-            step_text = f"{step['keyword'].strip()} {step['text'].strip()}"
-            step_result_json = {
-                'keyword': step['keyword'].strip(),
-                'text': step['text'].strip(),
-                'status': '',
-                'output': None
-            }
-
-            if scenario_failed:
-                stats['skipped'] += 1
-                step_result_json['status'] = 'skipped'
-                print_color(f"    - {step_text}", colors.OKCYAN, quiet=json_output)
-            else:
-                impl, args = find_implementation(step, implementations)
-                if impl:
-                    result = execute_step(impl, args, debug=debug, quiet=json_output)
-                    if result.returncode == 0:
-                        stats['passed'] += 1
-                        step_result_json['status'] = 'passed'
-                        print_color(f"    ✔ {step_text}", colors.OKGREEN, quiet=json_output)
-                    else:
-                        stats['failed'] += 1
-                        scenario_failed = True
-                        scenario_result_json['status'] = 'failed'
-                        step_result_json['status'] = 'failed'
-                        step_result_json['output'] = {
-                            'stdout': result.stdout.strip(),
-                            'stderr': result.stderr.strip()
-                        }
-                        print_color(f"    ✖ {step_text}", colors.FAIL, quiet=json_output)
-                        if not json_output and not debug: 
-                            if result.stdout: print(f"      stdout: {result.stdout.strip()}")
-                            if result.stderr: print(f"      stderr: {result.stderr.strip()}")
-                else:
-                    stats['undefined'] += 1
-                    scenario_failed = True 
-                    scenario_result_json['status'] = 'failed'
-                    step_result_json['status'] = 'undefined'
-                    print_color(f"    ? {step_text}", colors.WARNING, quiet=json_output)
-            
-            scenario_result_json['steps'].append(step_result_json)
+        with open(feature_file, 'r', encoding='utf-8', newline=None) as f:
+            feature_content = f.read()
         
-        results_json['scenarios'].append(scenario_result_json)
-        if scenario_failed:
-            stats['scenarios_failed'] += 1
-        else:
-            stats['scenarios_passed'] += 1
-            
-    if json_output:
-        results_json['summary'] = {
-            'scenarios': {
-                'total': stats['scenarios'],
-                'passed': stats['scenarios_passed'],
-                'failed': stats['scenarios_failed']
-            },
-            'steps': {
-                'total': stats['steps'],
-                'passed': stats['passed'],
-                'failed': stats['failed'],
-                'skipped': stats['skipped'],
-                'undefined': stats['undefined']
+        feature_content = normalize_line_endings(feature_content)
+        
+        parser = Parser()
+        gherkin_document = parser.parse(feature_content)
+        
+        if not gherkin_document.get('feature'):
+            raise Exception("No feature found in the file")
+        
+        feature = gherkin_document['feature']
+        
+        results = {
+            'feature': {'name': feature['name'], 'file': feature_file},
+            'scenarios': [],
+            'summary': {
+                'scenarios': {'total': 0, 'passed': 0, 'failed': 0},
+                'steps': {'total': 0, 'passed': 0, 'failed': 0, 'skipped': 0, 'undefined': 0}
             }
         }
-        return results_json
+        
+        if not json_output:
+            print_colored(f"Feature: {feature['name']}", Colors.BOLD)
+        
+        for child in feature.get('children', []):
+            if 'scenario' in child:
+                scenario = child['scenario']
+                scenario_result = {'name': scenario['name'], 'status': 'passed', 'steps': []}
+                results['summary']['scenarios']['total'] += 1
+                
+                if not json_output:
+                    print_colored(f"\n  Scenario: {scenario['name']}")
+                
+                scenario_failed = False
+                scenario_context = {}
 
-    print("\n" + "-"*50)
-    print("Run Summary:")
-    print(f"  Scenarios: {stats['scenarios']} total, {colors.OKGREEN}{stats['scenarios_passed']} passed{colors.ENDC}, {colors.FAIL}{stats['scenarios_failed']} failed{colors.ENDC}")
-    print(f"  Steps:     {stats['steps']} total, {colors.OKGREEN}{stats['passed']} passed{colors.ENDC}, {colors.FAIL}{stats['failed']} failed{colors.ENDC}, {colors.OKCYAN}{stats['skipped']} skipped{colors.ENDC}, {colors.WARNING}{stats['undefined']} undefined{colors.ENDC}")
-    print("-"*50)
+                for step in scenario.get('steps', []):
+                    results['summary']['steps']['total'] += 1
+                    step_keyword = step['keyword'].strip()
+                    step_text = step['text']
+                    
+                    if scenario_failed:
+                        step_result = {'keyword': step_keyword, 'text': step_text, 'status': 'skipped'}
+                        results['summary']['steps']['skipped'] += 1
+                        if not json_output:
+                            print_colored(f"    - {step_keyword} {step_text}", Colors.YELLOW)
+                    else:
+                        step_result = run_step(step_text, step_keyword, implementations, scenario_context, debug)
+                        step_result['keyword'] = step_keyword
+                        step_result['text'] = step_text
+                        
+                        if step_result['status'] == 'passed':
+                            results['summary']['steps']['passed'] += 1
+                            if step_result.get('stdout') is not None:
+                                scenario_context['PREVIOUS_STEP_STDOUT'] = step_result['stdout'].strip()
+                            if not json_output:
+                                print_colored(f"    ✓ {step_keyword} {step_text}", Colors.GREEN)
+                        else:
+                            scenario_failed = True
+                            scenario_result['status'] = 'failed'
+                            if step_result['status'] == 'failed':
+                                results['summary']['steps']['failed'] += 1
+                                if not json_output:
+                                    print_colored(f"    ✖ {step_keyword} {step_text}", Colors.RED)
+                                    if step_result.get('stderr'):
+                                        print_colored(f"      Error: {step_result['stderr']}", Colors.RED, file=sys.stderr)
+                            elif step_result['status'] == 'undefined':
+                                results['summary']['steps']['undefined'] += 1
+                                if not json_output:
+                                    print_colored(f"    ? {step_keyword} {step_text}", Colors.MAGENTA)
+                                    if step_result.get('output'):
+                                        print_colored(f"      {step_result['output']}", Colors.MAGENTA, file=sys.stderr)
+                    
+                    scenario_result['steps'].append(step_result)
+                
+                if scenario_result['status'] == 'passed':
+                    results['summary']['scenarios']['passed'] += 1
+                else:
+                    results['summary']['scenarios']['failed'] += 1
+                
+                results['scenarios'].append(scenario_result)
+        
+        return results
+        
+    except Exception as e:
+        if not json_output:
+            print_colored(f"Error processing feature file {feature_file}: {e}", Colors.RED, file=sys.stderr)
+        return {'error': str(e), 'summary': {}}
 
-    return stats['scenarios_failed'], stats['undefined']
+
+def print_summary(results):
+    """Print a summary of test results."""
+    if 'summary' not in results:
+        return
+    summary = results['summary']
+    
+    print_colored("\n" + "-" * 50)
+    print_colored("Run Summary:", Colors.BOLD)
+    
+    scenarios = summary.get('scenarios', {})
+    print_colored(f"  Scenarios: {scenarios.get('total', 0)} total, " +
+                 f"{Colors.GREEN}{scenarios.get('passed', 0)} passed{Colors.RESET}, {Colors.RED}{scenarios.get('failed', 0)} failed{Colors.RESET}")
+    
+    steps = summary.get('steps', {})
+    print_colored(f"  Steps:     {steps.get('total', 0)} total, " +
+                 f"{Colors.GREEN}{steps.get('passed', 0)} passed{Colors.RESET}, {Colors.RED}{steps.get('failed', 0)} failed{Colors.RESET}, " +
+                 f"{Colors.YELLOW}{steps.get('skipped', 0)} skipped{Colors.RESET}, {Colors.MAGENTA}{steps.get('undefined', 0)} undefined{Colors.RESET}")
+    
+    print_colored("-" * 50)
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="A Python-based test runner for Gherkin features with shell script implementations.",
-        formatter_class=argparse.RawTextHelpFormatter
-    )
-    parser.add_argument(
-        'feature_file', 
-        metavar='FEATURE_FILE',
-        help='Path to the .gherkin feature file to execute.'
-    )
-    parser.add_argument(
-        '--impl-dir', 
-        metavar='IMPL_DIR',
-        default='../gherkin-implements',
-        help='Directory to search for implementation files.\nDefaults to ../gherkin-implements'
-    )
-    parser.add_argument(
-        'implementation_files', 
-        metavar='IMPL_FILE', 
-        nargs='*', 
-        help='Optional paths to .gherkin files containing step implementations.\nIf not provided, the script will search the --impl-dir directory.'
-    )
-    parser.add_argument(
-        '--json',
-        action='store_true',
-        help='Output test results in a machine-readable JSON format.'
-    )
-    parser.add_argument(
-        '--debug',
-        action='store_true',
-        help='Enable debug mode to show command execution details.'
-    )
+    """Main entry point."""
+    parser = argparse.ArgumentParser(description='Gherkin Test Runner with Shell Script Implementations')
+    parser.add_argument('feature_file', help='Path to the .gherkin feature file')
+    parser.add_argument('--impl-dir', default='../gherkin-implements', 
+                       help='Directory containing implementation files (default: ../gherkin-implements)')
+    parser.add_argument('--json', action='store_true', help='Output results as JSON')
+    parser.add_argument('--debug', action='store_true', help='Enable debug output')
+    parser.add_argument('implementation_files', nargs='*', help='Specific implementation files to use (overrides --impl-dir)')
+    
     args = parser.parse_args()
-
-    if sys.platform == 'win32':
-        if shutil.which('bash') is None:
-            print_color("Error: 'bash.exe' was not found in your system's PATH.", colors.FAIL)
-            print_color("This script requires a Bash environment to run test steps on Windows.", colors.WARNING)
-            print_color("Please install Git for Windows or Windows Subsystem for Linux (WSL) and ensure 'bash.exe' is in your PATH.", colors.WARNING)
-            sys.exit(1)
-
-    if not args.json:
-        print("--- Gherkin Test Runner ---")
     
-    implementation_files_to_load = []
+    if not args.json:
+        print_colored("--- Gherkin Test Runner ---", Colors.CYAN + Colors.BOLD)
+    
     if args.implementation_files:
-        if not args.json:
-            print("Loading implementations from command-line arguments.")
-        implementation_files_to_load = args.implementation_files
+        impl_files = args.implementation_files
     else:
-        impl_path = os.path.join(args.impl_dir, '**', '*.gherkin')
-        if not args.json:
-            print(f"Searching for implementation files in: {os.path.abspath(args.impl_dir)}")
-        implementation_files_to_load = glob.glob(impl_path, recursive=True)
-
-    if not implementation_files_to_load:
-        print_color("Error: No implementation files found.", colors.FAIL, quiet=args.json)
-        print_color(f"Searched in '{os.path.abspath(args.impl_dir)}' for '*.gherkin' files.", colors.WARNING, quiet=args.json)
-        sys.exit(1)
-
-    if not args.json:
-        print(f"Loading implementations from {len(implementation_files_to_load)} file(s)...")
-    implementations = parse_implementation_files(implementation_files_to_load, quiet=args.json)
-    if not args.json:
-        print(f"Found {len(implementations)} step implementations.")
+        impl_files = find_implementation_files(args.impl_dir, args.debug)
     
-    results = run_feature_file(args.feature_file, implementations, json_output=args.json, debug=args.debug)
-
+    if not impl_files:
+        print_colored(f"No implementation files found in {args.impl_dir}", Colors.RED, file=sys.stderr)
+        sys.exit(1)
+    
+    implementations = load_all_implementations(impl_files, args.debug)
+    
+    if not implementations:
+        print_colored("No step implementations found", Colors.RED, file=sys.stderr)
+        sys.exit(1)
+    
+    results = run_gherkin_file(args.feature_file, implementations, args.debug, args.json)
+    
     if args.json:
         print(json.dumps(results, indent=2))
-        if 'error' in results or results['summary']['scenarios']['failed'] > 0:
-            sys.exit(1)
-        else:
-            sys.exit(0)
     else:
-        scenarios_failed, steps_undefined = results
-        if scenarios_failed > 0 or steps_undefined > 0:
-            sys.exit(1)
-        else:
-            sys.exit(0)
+        print_summary(results)
+    
+    if 'error' in results or results.get('summary', {}).get('scenarios', {}).get('failed', 0) > 0:
+        sys.exit(1)
+    else:
+        sys.exit(0)
 
-if __name__ == "__main__":
+
+if __name__ == '__main__':
     main()
+
