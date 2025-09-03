@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Widgets Demo - Management & Security Reporting</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .header {
+            background: #1e293b;
+            color: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 1.5rem;
+            padding: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .widget {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border: 1px solid #e2e8f0;
+        }
+
+        .widget-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #1e293b;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 0.5rem;
+        }
+
+        .widget-params {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            overflow-x: auto;
+        }
+
+        /* MetricCard Styles */
+        .metric-card {
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin: 0.5rem 0;
+        }
+
+        .metric-label {
+            font-size: 0.9rem;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .metric-trend {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.25rem;
+            margin-top: 0.5rem;
+            font-size: 0.85rem;
+        }
+
+        .trend-up { color: #22c55e; }
+        .trend-down { color: #ef4444; }
+        .trend-neutral { color: #6b7280; }
+
+        .status-critical { color: #ef4444; }
+        .status-warning { color: #f59e0b; }
+        .status-normal { color: #22c55e; }
+        .status-success { color: #10b981; }
+
+        /* StatusIndicator Styles */
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .status-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .status-healthy { background: #22c55e; }
+        .status-degraded { background: #f59e0b; }
+        .status-critical { background: #ef4444; }
+        .status-offline { background: #6b7280; }
+
+        .status-details {
+            flex: 1;
+        }
+
+        .status-label {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .status-updated {
+            font-size: 0.8rem;
+            color: #64748b;
+        }
+
+        /* ProgressGauge Styles */
+        .progress-gauge {
+            text-align: center;
+        }
+
+        .progress-circle {
+            margin: 1rem auto;
+            position: relative;
+            width: 120px;
+            height: 120px;
+        }
+
+        .progress-ring {
+            transform: rotate(-90deg);
+        }
+
+        .progress-bg {
+            fill: none;
+            stroke: #e2e8f0;
+            stroke-width: 8;
+        }
+
+        .progress-fill {
+            fill: none;
+            stroke: #3b82f6;
+            stroke-width: 8;
+            stroke-linecap: round;
+            transition: stroke-dasharray 0.5s ease;
+        }
+
+        .progress-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        /* AlertList Styles */
+        .alert-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .alert-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            border-radius: 6px;
+            background: #f8fafc;
+            border-left: 4px solid #e2e8f0;
+        }
+
+        .alert-high { border-left-color: #ef4444; }
+        .alert-medium { border-left-color: #f59e0b; }
+        .alert-low { border-left-color: #22c55e; }
+
+        .alert-content {
+            flex: 1;
+        }
+
+        .alert-title {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .alert-meta {
+            font-size: 0.8rem;
+            color: #64748b;
+        }
+
+        /* RankingList Styles */
+        .ranking-list {
+            list-style: none;
+        }
+
+        .ranking-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .ranking-number {
+            font-weight: 700;
+            color: #3b82f6;
+            min-width: 24px;
+        }
+
+        .ranking-label {
+            flex: 1;
+        }
+
+        .ranking-value {
+            font-weight: 600;
+        }
+
+        /* EventTimeline Styles */
+        .timeline {
+            max-height: 250px;
+            overflow-y: auto;
+        }
+
+        .timeline-item {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .timeline-time {
+            font-size: 0.8rem;
+            color: #64748b;
+            min-width: 80px;
+        }
+
+        .timeline-content {
+            flex: 1;
+        }
+
+        .timeline-title {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .timeline-desc {
+            font-size: 0.9rem;
+            color: #64748b;
+        }
+
+        /* Chart containers */
+        .chart-container {
+            position: relative;
+            height: 250px;
+            margin: 1rem 0;
+        }
+
+        .chart-small {
+            height: 200px;
+        }
+
+        /* HeatMatrix Styles */
+        .heat-matrix {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+            margin: 1rem 0;
+        }
+
+        .heat-cell {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 2px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .heat-low { background: #22c55e; }
+        .heat-medium { background: #f59e0b; }
+        .heat-high { background: #ef4444; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Management & Security Dashboard Widgets</h1>
+        <p>10 Essential Widgets for Executive and Security Reporting</p>
+    </div>
+
+    <div class="dashboard">
+        <!-- 1. MetricCard Widget -->
+        <div class="widget">
+            <h3 class="widget-title">1. MetricCard - Security Score</h3>
+            <div class="widget-params">
+Parameters: value: 87, label: "Security Posture Score", 
+trend: {direction: "up", percentage: 5, period: "30d"}, 
+status: "normal", unit: "%", format: "number"
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Security Posture Score</div>
+                <div class="metric-value status-normal">87%</div>
+                <div class="metric-trend trend-up">
+                    ↗ +5% (30d)
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. TrendChart Widget -->
+        <div class="widget">
+            <h3 class="widget-title">2. TrendChart - Incident Volume</h3>
+            <div class="widget-params">
+Parameters: data: [{timestamp, value}], timeRange: "7d", 
+metric: "incidents", aggregation: "count", 
+threshold: {value: 50, type: "warning"}
+            </div>
+            <div class="chart-container">
+                <canvas id="trendChart"></canvas>
+            </div>
+        </div>
+
+        <!-- 3. StatusIndicator Widget -->
+        <div class="widget">
+            <h3 class="widget-title">3. StatusIndicator - System Health</h3>
+            <div class="widget-params">
+Parameters: status: "healthy", label: "Infrastructure Status", 
+lastUpdated: "2025-09-03T14:30:00Z", 
+details: [{component: "Firewall", status: "healthy"}]
+            </div>
+            <div class="status-indicator">
+                <div class="status-dot status-healthy"></div>
+                <div class="status-details">
+                    <div class="status-label">Infrastructure Status</div>
+                    <div class="status-updated">Last updated: 14:30 UTC</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. ProgressGauge Widget -->
+        <div class="widget">
+            <h3 class="widget-title">4. ProgressGauge - Compliance Score</h3>
+            <div class="widget-params">
+Parameters: current: 78, target: 85, label: "SOC2 Compliance", 
+unit: "%", gaugeType: "circular", showPercentage: true
+            </div>
+            <div class="progress-gauge">
+                <div class="progress-circle">
+                    <svg class="progress-ring" width="120" height="120">
+                        <circle class="progress-bg" cx="60" cy="60" r="54"/>
+                        <circle class="progress-fill" cx="60" cy="60" r="54" 
+                                stroke-dasharray="265 340" stroke-dashoffset="0"/>
+                    </svg>
+                    <div class="progress-text">78%</div>
+                </div>
+                <div class="metric-label">SOC2 Compliance</div>
+            </div>
+        </div>
+
+        <!-- 5. AlertList Widget -->
+        <div class="widget">
+            <h3 class="widget-title">5. AlertList - Recent Security Alerts</h3>
+            <div class="widget-params">
+Parameters: alerts: [{id, title, severity, timestamp, status}], 
+maxItems: 5, filterBy: "severity", showTimestamp: true
+            </div>
+            <div class="alert-list">
+                <div class="alert-item alert-high">
+                    <div class="alert-content">
+                        <div class="alert-title">Failed login attempts detected</div>
+                        <div class="alert-meta">High • 2 minutes ago • Open</div>
+                    </div>
+                </div>
+                <div class="alert-item alert-medium">
+                    <div class="alert-content">
+                        <div class="alert-title">Unusual network traffic pattern</div>
+                        <div class="alert-meta">Medium • 15 minutes ago • Acknowledged</div>
+                    </div>
+                </div>
+                <div class="alert-item alert-low">
+                    <div class="alert-content">
+                        <div class="alert-title">Software update available</div>
+                        <div class="alert-meta">Low • 1 hour ago • Resolved</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6. RankingList Widget -->
+        <div class="widget">
+            <h3 class="widget-title">6. RankingList - Top Risk Departments</h3>
+            <div class="widget-params">
+Parameters: items: [{label, value, change}], rankingType: "top", 
+maxItems: 5, valueFormat: "number", showChange: true
+            </div>
+            <ol class="ranking-list">
+                <li class="ranking-item">
+                    <span class="ranking-number">1.</span>
+                    <span class="ranking-label">Engineering</span>
+                    <span class="ranking-value">142 incidents</span>
+                </li>
+                <li class="ranking-item">
+                    <span class="ranking-number">2.</span>
+                    <span class="ranking-label">Sales</span>
+                    <span class="ranking-value">89 incidents</span>
+                </li>
+                <li class="ranking-item">
+                    <span class="ranking-number">3.</span>
+                    <span class="ranking-label">Marketing</span>
+                    <span class="ranking-value">67 incidents</span>
+                </li>
+                <li class="ranking-item">
+                    <span class="ranking-number">4.</span>
+                    <span class="ranking-label">Finance</span>
+                    <span class="ranking-value">34 incidents</span>
+                </li>
+            </ol>
+        </div>
+
+        <!-- 7. CategoryBreakdown Widget -->
+        <div class="widget">
+            <h3 class="widget-title">7. CategoryBreakdown - Threat Distribution</h3>
+            <div class="widget-params">
+Parameters: data: [{category, value}], chartType: "donut", 
+showLegend: true, showPercentages: true, colorScheme: ["#ef4444", "#f59e0b", "#22c55e"]
+            </div>
+            <div class="chart-container chart-small">
+                <canvas id="categoryChart"></canvas>
+            </div>
+        </div>
+
+        <!-- 8. HeatMatrix Widget -->
+        <div class="widget">
+            <h3 class="widget-title">8. HeatMatrix - Weekly Attack Patterns</h3>
+            <div class="widget-params">
+Parameters: data: [{x: "Mon", y: "09:00", value: 23}], 
+xAxisLabel: "Day", yAxisLabel: "Hour", showValues: true
+            </div>
+            <div class="heat-matrix">
+                <div class="heat-cell heat-low">12</div>
+                <div class="heat-cell heat-medium">23</div>
+                <div class="heat-cell heat-high">45</div>
+                <div class="heat-cell heat-medium">31</div>
+                <div class="heat-cell heat-low">18</div>
+                <div class="heat-cell heat-low">9</div>
+                <div class="heat-cell heat-low">7</div>
+                <div class="heat-cell heat-medium">25</div>
+                <div class="heat-cell heat-high">52</div>
+                <div class="heat-cell heat-high">48</div>
+                <div class="heat-cell heat-medium">39</div>
+                <div class="heat-cell heat-medium">27</div>
+                <div class="heat-cell heat-low">14</div>
+                <div class="heat-cell heat-low">8</div>
+            </div>
+            <div style="font-size: 0.8rem; color: #64748b; text-align: center;">
+                Mon-Sun (Hourly Attack Attempts)
+            </div>
+        </div>
+
+        <!-- 9. EventTimeline Widget -->
+        <div class="widget">
+            <h3 class="widget-title">9. EventTimeline - Security Events</h3>
+            <div class="widget-params">
+Parameters: events: [{timestamp, title, type, actor}], 
+timeRange: "24h", maxEvents: 5, showDetails: true
+            </div>
+            <div class="timeline">
+                <div class="timeline-item">
+                    <div class="timeline-time">14:25</div>
+                    <div class="timeline-content">
+                        <div class="timeline-title">Firewall rule updated</div>
+                        <div class="timeline-desc">Admin user modified access rules</div>
+                    </div>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-time">13:45</div>
+                    <div class="timeline-content">
+                        <div class="timeline-title">Failed authentication</div>
+                        <div class="timeline-desc">Multiple failed login attempts from 192.168.1.100</div>
+                    </div>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-time">12:30</div>
+                    <div class="timeline-content">
+                        <div class="timeline-title">Security scan completed</div>
+                        <div class="timeline-desc">Automated vulnerability scan finished</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 10. ComparisonChart Widget -->
+        <div class="widget">
+            <h3 class="widget-title">10. ComparisonChart - Department Risk Comparison</h3>
+            <div class="widget-params">
+Parameters: data: [{category, current, target, benchmark}], 
+comparisonType: "target", showVariance: true, 
+colorCoding: "performance"
+            </div>
+            <div class="chart-container">
+                <canvas id="comparisonChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize charts after DOM loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // TrendChart
+            const trendCtx = document.getElementById('trendChart').getContext('2d');
+            new Chart(trendCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                    datasets: [{
+                        label: 'Security Incidents',
+                        data: [12, 19, 8, 15, 25, 18, 11],
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+
+            // CategoryBreakdown (Donut Chart)
+            const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+            new Chart(categoryCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Malware', 'Phishing', 'DDoS', 'Data Breach'],
+                    datasets: [{
+                        data: [35, 28, 22, 15],
+                        backgroundColor: ['#ef4444', '#f59e0b', '#3b82f6', '#22c55e']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+
+            // ComparisonChart
+            const comparisonCtx = document.getElementById('comparisonChart').getContext('2d');
+            new Chart(comparisonCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Engineering', 'Sales', 'Marketing', 'Finance', 'HR'],
+                    datasets: [{
+                        label: 'Current Risk Score',
+                        data: [78, 65, 52, 41, 33],
+                        backgroundColor: '#3b82f6'
+                    }, {
+                        label: 'Target Score',
+                        data: [65, 55, 45, 35, 25],
+                        backgroundColor: '#22c55e'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        });
+
+        // Widget abstraction layer example
+        class WidgetAbstraction {
+            constructor(type, element, config) {
+                this.type = type;
+                this.element = element;
+                this.config = config;
+            }
+
+            render() {
+                // This would route to appropriate implementation
+                console.log(`Rendering ${this.type} widget with config:`, this.config);
+            }
+
+            update(newData) {
+                // Update widget with new data
+                console.log(`Updating ${this.type} widget with:`, newData);
+            }
+        }
+
+        // Example usage of abstraction
+        const securityScoreWidget = new WidgetAbstraction('MetricCard', '#security-score', {
+            value: 87,
+            label: 'Security Posture Score',
+            trend: { direction: 'up', percentage: 5, period: '30d' },
+            status: 'normal',
+            unit: '%'
+        });
+    </script>
+</body>
+</html>

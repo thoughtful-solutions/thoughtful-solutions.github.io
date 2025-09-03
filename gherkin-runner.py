@@ -5,6 +5,7 @@ import subprocess
 import argparse
 import glob
 import json
+import shutil 
 from gherkin.parser import Parser
 
 # ANSI color codes for terminal output
@@ -50,61 +51,32 @@ def parse_implementation_files(implementation_files, quiet=False):
             
         current_script = []
         in_implementation_block = False
+        
+        current_pattern_str = None
 
         for i, line in enumerate(lines):
             match = implementation_pattern.match(line)
-            if match:
-                # If we were in a block, save the previous one
-                if in_implementation_block and current_script:
-                    # The pattern was on the previous line in the loop
-                    prev_line_match = implementation_pattern.match(lines[i-len(current_script)-1])
-                    if prev_line_match:
-                        pattern_str = prev_line_match.group(1).strip()
-                        # Convert gherkin-style regex to python-style
-                        pattern = re.sub(r"'([^']*)'", r"'(.*?)'", pattern_str)
-                        implementations.append({
-                            'pattern': re.compile(pattern),
-                            'script': "".join(current_script)
-                        })
+            
+            if (match or i == len(lines) - 1) and in_implementation_block and current_script:
+                if i == len(lines) - 1 and not match and line.strip() != '':
+                     current_script.append(line)
 
-                # Start a new block
-                in_implementation_block = True
-                current_script = []
-            elif in_implementation_block and (line.strip() == '' or line.startswith('#')):
-                # End of block
-                if current_script:
-                    prev_line_match = implementation_pattern.match(lines[i-len(current_script)-1])
-                    if prev_line_match:
-                        pattern_str = prev_line_match.group(1).strip()
-                        pattern = re.sub(r"'([^']*)'", r"'(.*?)'", pattern_str)
-                        implementations.append({
-                            'pattern': re.compile(pattern),
-                            'script': "".join(current_script)
-                        })
-                in_implementation_block = False
-                current_script = []
-            elif in_implementation_block and line.strip() != "":
-                # Collect script lines, preserving indentation
-                if line.startswith('    '):
-                    current_script.append(line[4:])
-                else:
-                    current_script.append(line)
-
-        # Add the last implementation if the file doesn't end with a blank line
-        if in_implementation_block and current_script:
-            last_impl_line_index = len(lines) - len(current_script) - 1
-            # Find the last IMPLEMENTS line before the script
-            for idx in range(len(lines) - len(current_script), -1, -1):
-                last_match = implementation_pattern.match(lines[idx])
-                if last_match:
-                    pattern_str = last_match.group(1).strip()
-                    pattern = re.sub(r"'([^']*)'", r"'(.*?)'", pattern_str)
+                if current_pattern_str:
+                    pattern = re.sub(r"'([^']*)'", r"'(.*?)'", current_pattern_str)
                     implementations.append({
                         'pattern': re.compile(pattern),
                         'script': "".join(current_script)
                     })
-                    break
+                current_script = []
+                in_implementation_block = False
 
+            if match:
+                in_implementation_block = True
+                current_pattern_str = match.group(1).strip()
+                current_script = []
+            elif in_implementation_block and line.strip() != "":
+                current_script.append(line)
+                
     return implementations
 
 def find_implementation(step, implementations):
@@ -119,20 +91,22 @@ def find_implementation(step, implementations):
         tuple: A tuple containing the matched implementation and the regex match groups,
                or (None, None) if no match is found.
     """
-    step_text = step['text']
+    step_text = f"{step['keyword'].strip()} {step['text'].strip()}"
     for impl in implementations:
         match = impl['pattern'].match(step_text)
         if match:
             return impl, match.groups()
     return None, None
 
-def execute_step(implementation, args):
+def execute_step(implementation, args, debug=False, quiet=False):
     """
     Executes the shell script for a step implementation.
 
     Args:
         implementation (dict): The step implementation dictionary.
         args (tuple): The regex match groups to substitute into the script.
+        debug (bool): If True, prints detailed execution info.
+        quiet (bool): Suppress printed output.
 
     Returns:
         subprocess.CompletedProcess: The result of the subprocess run.
@@ -140,21 +114,36 @@ def execute_step(implementation, args):
     script_to_execute = implementation['script']
     for i, arg in enumerate(args, 1):
         script_to_execute = script_to_execute.replace(f"$MATCH_{i}", arg)
+
+    if debug:
+        print_color("--- DEBUG: Executing Script ---", colors.OKBLUE, quiet=quiet)
+        print_color(script_to_execute.strip(), colors.OKCYAN, quiet=quiet)
+        print_color("-------------------------------", colors.OKBLUE, quiet=quiet)
     
-    # Determine the executable to use (bash, or sh as a fallback)
-    executable = 'bash' if sys.platform != 'win32' else None 
-    # On windows, shell=True will use the default shell, which when using Git Bash,
-    # allows it to use bash if it's in the PATH.
+    # MODIFIED: Run bash directly, passing the script via standard input.
+    # This is a more reliable method on Windows than using shell=True with executable='bash'.
+    bash_path = shutil.which('bash')
     result = subprocess.run(
-        script_to_execute,
-        shell=True,
+        [bash_path],             # The command is the full path to bash
+        input=script_to_execute, # Pass the script string to stdin
+        shell=False,             # We are calling the executable directly
         capture_output=True,
-        text=True,
-        executable=executable
+        text=True
     )
+
+    if debug:
+        print_color(f"--- DEBUG: Result (Exit Code: {result.returncode}) ---", colors.OKBLUE, quiet=quiet)
+        if result.stdout.strip():
+            print_color("  stdout:", colors.HEADER, quiet=quiet)
+            print_color(result.stdout.strip(), colors.OKCYAN, quiet=quiet)
+        if result.stderr.strip():
+            print_color("  stderr:", colors.HEADER, quiet=quiet)
+            print_color(result.stderr.strip(), colors.FAIL, quiet=quiet)
+        print_color("---------------------------------", colors.OKBLUE, quiet=quiet)
+        
     return result
 
-def run_feature_file(feature_file_path, implementations, json_output=False):
+def run_feature_file(feature_file_path, implementations, json_output=False, debug=False):
     """
     Parses and runs a .gherkin feature file.
 
@@ -162,6 +151,7 @@ def run_feature_file(feature_file_path, implementations, json_output=False):
         feature_file_path (str): The path to the feature file.
         implementations (list): The list of available step implementations.
         json_output (bool): If True, returns a dict with results instead of printing.
+        debug (bool): If True, enables detailed execution logs for each step.
 
     Returns:
         tuple or dict: If json_output is True, returns a dictionary of results.
@@ -229,7 +219,7 @@ def run_feature_file(feature_file_path, implementations, json_output=False):
             else:
                 impl, args = find_implementation(step, implementations)
                 if impl:
-                    result = execute_step(impl, args)
+                    result = execute_step(impl, args, debug=debug, quiet=json_output)
                     if result.returncode == 0:
                         stats['passed'] += 1
                         step_result_json['status'] = 'passed'
@@ -244,12 +234,12 @@ def run_feature_file(feature_file_path, implementations, json_output=False):
                             'stderr': result.stderr.strip()
                         }
                         print_color(f"    ✖ {step_text}", colors.FAIL, quiet=json_output)
-                        if not json_output:
+                        if not json_output and not debug: 
                             if result.stdout: print(f"      stdout: {result.stdout.strip()}")
                             if result.stderr: print(f"      stderr: {result.stderr.strip()}")
                 else:
                     stats['undefined'] += 1
-                    scenario_failed = True # Treat undefined steps as a scenario failure
+                    scenario_failed = True 
                     scenario_result_json['status'] = 'failed'
                     step_result_json['status'] = 'undefined'
                     print_color(f"    ? {step_text}", colors.WARNING, quiet=json_output)
@@ -279,7 +269,6 @@ def run_feature_file(feature_file_path, implementations, json_output=False):
         }
         return results_json
 
-    # Human-readable summary
     print("\n" + "-"*50)
     print("Run Summary:")
     print(f"  Scenarios: {stats['scenarios']} total, {colors.OKGREEN}{stats['scenarios_passed']} passed{colors.ENDC}, {colors.FAIL}{stats['scenarios_failed']} failed{colors.ENDC}")
@@ -290,9 +279,6 @@ def run_feature_file(feature_file_path, implementations, json_output=False):
 
 
 def main():
-    """
-    Main entry point for the script.
-    """
     parser = argparse.ArgumentParser(
         description="A Python-based test runner for Gherkin features with shell script implementations.",
         formatter_class=argparse.RawTextHelpFormatter
@@ -311,7 +297,7 @@ def main():
     parser.add_argument(
         'implementation_files', 
         metavar='IMPL_FILE', 
-        nargs='*', # 0 or more
+        nargs='*', 
         help='Optional paths to .gherkin files containing step implementations.\nIf not provided, the script will search the --impl-dir directory.'
     )
     parser.add_argument(
@@ -319,12 +305,23 @@ def main():
         action='store_true',
         help='Output test results in a machine-readable JSON format.'
     )
+    parser.add_argument(
+        '--debug',
+        action='store_true',
+        help='Enable debug mode to show command execution details.'
+    )
     args = parser.parse_args()
+
+    if sys.platform == 'win32':
+        if shutil.which('bash') is None:
+            print_color("Error: 'bash.exe' was not found in your system's PATH.", colors.FAIL)
+            print_color("This script requires a Bash environment to run test steps on Windows.", colors.WARNING)
+            print_color("Please install Git for Windows or Windows Subsystem for Linux (WSL) and ensure 'bash.exe' is in your PATH.", colors.WARNING)
+            sys.exit(1)
 
     if not args.json:
         print("--- Gherkin Test Runner ---")
     
-    # 1. Determine which implementation files to use
     implementation_files_to_load = []
     if args.implementation_files:
         if not args.json:
@@ -341,17 +338,14 @@ def main():
         print_color(f"Searched in '{os.path.abspath(args.impl_dir)}' for '*.gherkin' files.", colors.WARNING, quiet=args.json)
         sys.exit(1)
 
-    # 2. Parse all implementation files
     if not args.json:
         print(f"Loading implementations from {len(implementation_files_to_load)} file(s)...")
     implementations = parse_implementation_files(implementation_files_to_load, quiet=args.json)
     if not args.json:
         print(f"Found {len(implementations)} step implementations.")
     
-    # 3. Run the feature file
-    results = run_feature_file(args.feature_file, implementations, json_output=args.json)
+    results = run_feature_file(args.feature_file, implementations, json_output=args.json, debug=args.debug)
 
-    # 4. Handle output and exit code
     if args.json:
         print(json.dumps(results, indent=2))
         if 'error' in results or results['summary']['scenarios']['failed'] > 0:
@@ -367,4 +361,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
