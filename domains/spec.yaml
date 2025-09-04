@@ -1,0 +1,41 @@
+D-001-business-architecture.md:
+  governed_by_principles:
+  - principles/AP-003-agility.md
+  - principles/AP-004-efficiency.md
+  - principles/AP-001-simplicity.md
+  moscow: Should
+D-002-data-architecture.md:
+  governed_by_principles:
+  - principles/AP-002-uniformity.md
+  - principles/AP-005-proven.md
+  moscow: Should
+D-003-application-architecture.md:
+  governed_by_principles:
+  - principles/AP-001-simplicity.md
+  - principles/AP-003-agility.md
+  moscow: Should
+D-004-technology-architecture.md:
+  governed_by_principles:
+  - principles/AP-007-resiliency.md
+  - principles/AP-006-supportable.md
+  - principles/AP-005-proven.md
+  moscow: Should
+__config__:
+  template: '# {prefix}: {title}
+
+
+    ## Purpose
+
+    - {description}
+
+
+    ## Scope
+
+    - <...>
+
+
+    ## Stakeholders
+
+    - <...>
+
+    '
