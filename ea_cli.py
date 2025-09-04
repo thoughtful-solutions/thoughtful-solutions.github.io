@@ -31,7 +31,8 @@ RELATIONSHIP_MAP = {
         "verified_by": "verification"
     },
     "domain": {
-        "governed_by_principles": "principle"
+        "governed_by_principles": "principle",
+         "verified_by": "verification"
     }
 }
 

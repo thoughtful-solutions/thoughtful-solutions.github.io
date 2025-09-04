@@ -4,22 +4,37 @@ D-001-business-architecture.md:
   - principles/AP-004-efficiency.md
   - principles/AP-001-simplicity.md
   moscow: Should
+  verified_by:
+  - verifications/V-001-business-capability-model-is-complete-and-current.md
+  - verifications/V-002-value-stream-architecture-covers-all-stakeholder-journeys.md
+  - verifications/V-003-business-processes-are-mapped-to-supporting-applications.md
 D-002-data-architecture.md:
   governed_by_principles:
   - principles/AP-002-uniformity.md
   - principles/AP-005-proven.md
   moscow: Should
+  verified_by:
+  - verifications/V-004-enterprise-data-model-covers-all-business-entities.md
+  - verifications/V-005-data-flows-are-documented-and-monitored.md
+  - verifications/V-006-data-governance-policies-are-implemented-and-enforced.md
 D-003-application-architecture.md:
   governed_by_principles:
   - principles/AP-001-simplicity.md
   - principles/AP-003-agility.md
   moscow: Should
+  verified_by:
+  - verifications/V-007-application-portfolio-is-discovered-and-cataloged.md
+  - verifications/V-008-application-integration-follows-enterprise-standards.md
+  - verifications/V-009-applications-support-business-processes-effectively.md
 D-004-technology-architecture.md:
   governed_by_principles:
   - principles/AP-007-resiliency.md
   - principles/AP-006-supportable.md
   - principles/AP-005-proven.md
   moscow: Should
+  verified_by:
+  - verifications/V-011-security-architecture-is-implemented-and-current.md
+  - verifications/V-012-platform-standards-are-consistently-implemented.md
 __config__:
   template: '# {prefix}: {title}
 
