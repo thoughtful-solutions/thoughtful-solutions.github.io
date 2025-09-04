@@ -1,2 +1,24 @@
-V-001-simplicity-principle-is-verified-by-a-low-rule-count.md:
-  moscow: Must
+V-001-business-capability-model-is-complete-and-current.md:
+  moscow: Should
+V-002-value-stream-architecture-covers-all-stakeholder-journeys.md:
+  moscow: Should
+V-003-business-processes-are-mapped-to-supporting-applications.md:
+  moscow: Should
+V-004-enterprise-data-model-covers-all-business-entities.md:
+  moscow: Should
+V-005-data-flows-are-documented-and-monitored.md:
+  moscow: Should
+V-006-data-governance-policies-are-implemented-and-enforced.md:
+  moscow: Should
+V-007-application-portfolio-is-discovered-and-cataloged.md:
+  moscow: Should
+V-008-application-integration-follows-enterprise-standards.md:
+  moscow: Should
+V-009-applications-support-business-processes-effectively.md:
+  moscow: Should
+V-010-infrastructure-is-discovered-and-monitored.md:
+  moscow: Should
+V-011-security-architecture-is-implemented-and-current.md:
+  moscow: Should
+V-012-platform-standards-are-consistently-implemented.md:
+  moscow: Should
