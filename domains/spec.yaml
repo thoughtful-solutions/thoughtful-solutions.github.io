@@ -3,6 +3,8 @@ D-001-business-architecture.md:
   - principles/AP-003-agility.md
   - principles/AP-004-efficiency.md
   - principles/AP-001-simplicity.md
+  - principles/AP-009-business-alignment.md
+  - principles/AP-012-reusability.md
   moscow: Should
   verified_by:
   - verifications/V-001-business-capability-model-is-complete-and-current.md
@@ -12,6 +14,8 @@ D-002-data-architecture.md:
   governed_by_principles:
   - principles/AP-002-uniformity.md
   - principles/AP-005-proven.md
+  - principles/AP-011-data-stewardship.md
+  - principles/AP-008-interoperability.md
   moscow: Should
   verified_by:
   - verifications/V-004-enterprise-data-model-covers-all-business-entities.md
@@ -21,6 +25,9 @@ D-003-application-architecture.md:
   governed_by_principles:
   - principles/AP-001-simplicity.md
   - principles/AP-003-agility.md
+  - principles/AP-008-interoperability.md
+  - principles/AP-012-reusability.md
+  - principles/AP-010-technology-independence.md
   moscow: Should
   verified_by:
   - verifications/V-007-application-portfolio-is-discovered-and-cataloged.md
@@ -31,10 +38,13 @@ D-004-technology-architecture.md:
   - principles/AP-007-resiliency.md
   - principles/AP-006-supportable.md
   - principles/AP-005-proven.md
+  - principles/AP-010-technology-independence.md
+  - principles/AP-008-interoperability.md
   moscow: Should
   verified_by:
   - verifications/V-011-security-architecture-is-implemented-and-current.md
   - verifications/V-012-platform-standards-are-consistently-implemented.md
+  - verifications/V-010-infrastructure-is-discovered-and-monitored.md
 __config__:
   template: '# {prefix}: {title}
 
