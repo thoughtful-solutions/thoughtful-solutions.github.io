@@ -11,26 +11,41 @@ Business Architecture provides a blueprint of the enterprise that aligns strateg
 * **Bridge** the gap between business strategy and execution by guiding the Data, Application, and Technology domains.
 * **Enable** informed decision-making for investment planning, change management, and governance.
 
-
-
 ## Scope
 
-* **Strategy \& Value**
-
+* **Strategy & Value**
   * The business strategy and its goals.
   * Value streams that describe how value is delivered to stakeholders.
   * The business services and products offered.
 
 * **Operating Model**
-
   * Business capabilities defining what the business does.
   * Key business processes and their inter-relationships.
   * The organization's structure, including roles and responsibilities.
 
 * **Information**
-
   * The business information required to support key processes.
+
+## Deliverables
+
+* **Business Capability Model** - Hierarchical map with maturity scores
+* **Value Stream Architecture** - End-to-end value delivery flows
+* **Business Process Models** - Current and target state process maps
+* **Organizational Architecture** - Structure, roles, and governance model
+
+## Data Sources
+
+* **HR Systems API** - Organizational structure, roles, job descriptions
+* **Financial Systems** - Budget allocations, cost centers, investment data
+* **Project Portfolio Tools** - Initiatives mapped to business capabilities
+* **CRM/ERP Systems** - Business process data, transaction volumes
+* **Survey Tools** - Capability maturity assessments
+
 
 ## Stakeholders
 
-* <...>
+* Business Unit Leaders
+* Executive Team
+* Strategic Planning
+* Process Owners
+* Investment Committee
