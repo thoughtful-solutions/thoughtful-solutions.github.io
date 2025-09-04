@@ -2,7 +2,7 @@
 venv/
 principles/
 rules/
-domains/
+domains
 verifications/
 gherkin/
 gherkin-implements/
