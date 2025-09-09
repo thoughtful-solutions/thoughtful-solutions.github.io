@@ -22,3 +22,103 @@ V-011-security-architecture-is-implemented-and-current.md:
   moscow: Should
 V-012-platform-standards-are-consistently-implemented.md:
   moscow: Should
+V-013-simplicity-metrics-meet-thresholds.md:
+  moscow: Must
+V-014-service-uniformity-reduces-development-time.md:
+  moscow: Must
+V-015-agility-through-rapid-deployment-capability.md:
+  moscow: Must
+V-016-efficiency-metrics-demonstrate-optimization.md:
+  moscow: Must
+V-017-technology-choices-follow-proven-patterns.md:
+  moscow: Should
+V-018-support-capabilities-meet-sla-requirements.md:
+  moscow: Must
+V-019-resilience-testing-validates-recovery-capabilities.md:
+  moscow: Must
+V-020-interoperability-standards-are-enforced.md:
+  moscow: Must
+V-021-business-it-alignment-is-measurable.md:
+  moscow: Must
+V-022-technology-independence-enables-portability.md:
+  moscow: Should
+V-023-data-stewardship-roles-are-active.md:
+  moscow: Must
+V-024-reusable-components-reduce-duplication.md:
+  moscow: Must
+V-025-infrastructure-provisioning-is-fully-reproducible.md:
+  moscow: Must
+V-026-service-modularity-enables-independent-deployment.md:
+  moscow: Must
+V-027-management-capabilities-provide-full-visibility.md:
+  moscow: Must
+V-028-scaling-events-meet-performance-targets.md:
+  moscow: Should
+V-029-availability-targets-are-consistently-met.md:
+  moscow: Must
+V-030-audit-trails-are-complete-and-searchable.md:
+  moscow: Must
+V-031-security-controls-pass-compliance-scans.md:
+  moscow: Must
+V-032-documentation-is-current-and-comprehensive.md:
+  moscow: Must
+V-033-version-control-covers-all-artifacts.md:
+  moscow: Must
+V-034-automated-tests-validate-all-requirements.md:
+  moscow: Must
+V-035-observability-data-flows-to-central-platforms.md:
+  moscow: Must
+V-036-compliance-status-is-continuously-validated.md:
+  moscow: Must
+V-037-service-discovery-is-automated-and-current.md:
+  moscow: Must
+V-038-cost-attribution-is-accurate-and-actionable.md:
+  moscow: Should
+V-039-recovery-procedures-are-tested-quarterly.md:
+  moscow: Must
+V-040-end-to-end-traceability-from-principles-to-implementation.md:
+  moscow: Must
+V-041-architecture-decisions-have-documented-rationale-and-tests.md:
+  moscow: Must
+V-042-technical-debt-is-tracked-and-prioritized.md:
+  moscow: Should
+V-055-simplicity-metrics-meet-thresholds.md:
+  moscow: Must
+V-056-service-uniformity-reduces-development-time.md:
+  moscow: Must
+V-057-agility-through-rapid-deployment-capability.md:
+  moscow: Must
+V-058-efficiency-metrics-demonstrate-optimization.md:
+  moscow: Must
+V-059-technology-choices-follow-proven-patterns.md:
+  moscow: Should
+V-060-infrastructure-provisioning-is-fully-reproducible.md:
+  moscow: Must
+V-061-service-modularity-enables-independent-deployment.md:
+  moscow: Must
+V-062-documentation-is-current-and-comprehensive.md:
+  moscow: Must
+V-063-observability-data-flows-to-central-platforms.md:
+  moscow: Must
+V-064-end-to-end-traceability-from-principles-to-implementation.md:
+  moscow: Must
+V-065-simplicity-metrics-meet-thresholds.md:
+  moscow: Must
+V-066-service-uniformity-reduces-development-time.md:
+  moscow: Must
+V-067-agility-through-rapid-deployment-capability.md:
+  moscow: Must
+V-068-efficiency-metrics-demonstrate-optimization.md:
+  moscow: Must
+V-069-technology-choices-follow-proven-patterns.md:
+  moscow: Should
+V-070-infrastructure-provisioning-is-fully-reproducible.md:
+  moscow: Must
+V-071-service-modularity-enables-independent-deployment.md:
+  moscow: Must
+V-072-documentation-is-current-and-comprehensive.md:
+  moscow: Must
+V-073-observability-data-flows-to-central-platforms.md:
+  moscow: Must
+V-074-end-to-end-traceability-from-principles-to-implementation.md:
+  moscow: Must
