@@ -38,6 +38,8 @@ D-003-application-architecture.md:
   - verifications/V-026-service-modularity-enables-independent-deployment.md
   - verifications/V-067-agility-through-rapid-deployment-capability.md
   - verifications/V-071-service-modularity-enables-independent-deployment.md
+  - verifications/V-057-agility-through-rapid-deployment-capability.md
+  - verifications/V-061-service-modularity-enables-independent-deployment.md
 D-004-technology-architecture.md:
   governed_by_principles:
   - principles/AP-007-resiliency.md
@@ -53,6 +55,8 @@ D-004-technology-architecture.md:
   - verifications/V-025-infrastructure-provisioning-is-fully-reproducible.md
   - verifications/V-070-infrastructure-provisioning-is-fully-reproducible.md
   - verifications/V-073-observability-data-flows-to-central-platforms.md
+  - verifications/V-060-infrastructure-provisioning-is-fully-reproducible.md
+  - verifications/V-063-observability-data-flows-to-central-platforms.md
 __config__:
   template: '# {prefix}: {title}
 
