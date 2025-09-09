@@ -1,0 +1,3 @@
+# AR: Manageable
+
+The ability to gather information about the state of environment...

@@ -1,0 +1,3 @@
+# AR: Available
+
+The ability for resources to be accessible and usable upon demand...

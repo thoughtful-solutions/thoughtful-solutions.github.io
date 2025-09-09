@@ -1,0 +1,107 @@
+AR-001-reproducible.md:
+  moscow: Should
+  supports_principles: []
+  verified_by:
+  - verifications/V-025-infrastructure-provisioning-is-fully-reproducible.md
+  - verifications/V-066-service-uniformity-reduces-development-time.md
+  - verifications/V-069-technology-choices-follow-proven-patterns.md
+  - verifications/V-070-infrastructure-provisioning-is-fully-reproducible.md
+  - verifications/V-056-service-uniformity-reduces-development-time.md
+  - verifications/V-059-technology-choices-follow-proven-patterns.md
+  - verifications/V-060-infrastructure-provisioning-is-fully-reproducible.md
+AR-002-modular.md:
+  moscow: Should
+  supports_principles: []
+  verified_by:
+  - verifications/V-026-service-modularity-enables-independent-deployment.md
+  - verifications/V-065-simplicity-metrics-meet-thresholds.md
+  - verifications/V-066-service-uniformity-reduces-development-time.md
+  - verifications/V-071-service-modularity-enables-independent-deployment.md
+  - verifications/V-055-simplicity-metrics-meet-thresholds.md
+  - verifications/V-056-service-uniformity-reduces-development-time.md
+  - verifications/V-061-service-modularity-enables-independent-deployment.md
+AR-003-manageable.md:
+  moscow: Should
+  supports_principles: []
+  verified_by:
+  - verifications/V-027-management-capabilities-provide-full-visibility.md
+  - verifications/V-068-efficiency-metrics-demonstrate-optimization.md
+  - verifications/V-058-efficiency-metrics-demonstrate-optimization.md
+AR-004-scaleable.md:
+  moscow: Should
+  supports_principles: []
+  verified_by:
+  - verifications/V-028-scaling-events-meet-performance-targets.md
+  - verifications/V-067-agility-through-rapid-deployment-capability.md
+  - verifications/V-057-agility-through-rapid-deployment-capability.md
+AR-005-available.md:
+  moscow: Should
+  supports_principles: []
+  verified_by:
+  - verifications/V-029-availability-targets-are-consistently-met.md
+AR-006-auditable.md:
+  moscow: Should
+  supports_principles: []
+  verified_by:
+  - verifications/V-030-audit-trails-are-complete-and-searchable.md
+AR-007-secure.md:
+  moscow: Should
+  supports_principles: []
+  verified_by:
+  - verifications/V-031-security-controls-pass-compliance-scans.md
+AR-008-documented.md:
+  moscow: Must
+  supports_principles: []
+  verified_by:
+  - verifications/V-032-documentation-is-current-and-comprehensive.md
+  - verifications/V-040-end-to-end-traceability-from-principles-to-implementation.md
+  - verifications/V-041-architecture-decisions-have-documented-rationale-and-tests.md
+  - verifications/V-065-simplicity-metrics-meet-thresholds.md
+  - verifications/V-072-documentation-is-current-and-comprehensive.md
+  - verifications/V-074-end-to-end-traceability-from-principles-to-implementation.md
+  - verifications/V-055-simplicity-metrics-meet-thresholds.md
+  - verifications/V-062-documentation-is-current-and-comprehensive.md
+  - verifications/V-064-end-to-end-traceability-from-principles-to-implementation.md
+AR-009-versioned.md:
+  moscow: Must
+  supports_principles: []
+  verified_by:
+  - verifications/V-033-version-control-covers-all-artifacts.md
+AR-010-testable.md:
+  moscow: Must
+  supports_principles: []
+  verified_by:
+  - verifications/V-034-automated-tests-validate-all-requirements.md
+  - verifications/V-041-architecture-decisions-have-documented-rationale-and-tests.md
+  - verifications/V-074-end-to-end-traceability-from-principles-to-implementation.md
+  - verifications/V-064-end-to-end-traceability-from-principles-to-implementation.md
+AR-011-observable.md:
+  moscow: Must
+  supports_principles: []
+  verified_by:
+  - verifications/V-035-observability-data-flows-to-central-platforms.md
+  - verifications/V-068-efficiency-metrics-demonstrate-optimization.md
+  - verifications/V-073-observability-data-flows-to-central-platforms.md
+  - verifications/V-058-efficiency-metrics-demonstrate-optimization.md
+  - verifications/V-063-observability-data-flows-to-central-platforms.md
+AR-012-compliant.md:
+  moscow: Must
+  supports_principles: []
+  verified_by:
+  - verifications/V-036-compliance-status-is-continuously-validated.md
+AR-013-discoverable.md:
+  moscow: Must
+  supports_principles: []
+  verified_by:
+  - verifications/V-037-service-discovery-is-automated-and-current.md
+AR-014-cost-trackable.md:
+  moscow: Should
+  supports_principles: []
+  verified_by:
+  - verifications/V-038-cost-attribution-is-accurate-and-actionable.md
+  - verifications/V-042-technical-debt-is-tracked-and-prioritized.md
+AR-015-recoverable.md:
+  moscow: Must
+  supports_principles: []
+  verified_by:
+  - verifications/V-039-recovery-procedures-are-tested-quarterly.md

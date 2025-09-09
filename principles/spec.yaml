@@ -1,0 +1,113 @@
+AP-001-simplicity.md:
+  moscow: Should
+  supported_by_rules:
+  - rules/AR-002-modular.md
+  - rules/AR-008-documented.md
+  verified_by:
+  - verifications/V-013-simplicity-metrics-meet-thresholds.md
+  - verifications/V-040-end-to-end-traceability-from-principles-to-implementation.md
+  - verifications/V-065-simplicity-metrics-meet-thresholds.md
+  - verifications/V-072-documentation-is-current-and-comprehensive.md
+  - verifications/V-055-simplicity-metrics-meet-thresholds.md
+  - verifications/V-062-documentation-is-current-and-comprehensive.md
+AP-002-uniformity.md:
+  moscow: Should
+  supported_by_rules:
+  - rules/AR-002-modular.md
+  - rules/AR-001-reproducible.md
+  verified_by:
+  - verifications/V-014-service-uniformity-reduces-development-time.md
+  - verifications/V-066-service-uniformity-reduces-development-time.md
+  - verifications/V-056-service-uniformity-reduces-development-time.md
+AP-003-agility.md:
+  moscow: Should
+  supported_by_rules:
+  - rules/AR-004-scaleable.md
+  - rules/AR-002-modular.md
+  verified_by:
+  - verifications/V-015-agility-through-rapid-deployment-capability.md
+  - verifications/V-067-agility-through-rapid-deployment-capability.md
+  - verifications/V-071-service-modularity-enables-independent-deployment.md
+  - verifications/V-057-agility-through-rapid-deployment-capability.md
+  - verifications/V-061-service-modularity-enables-independent-deployment.md
+AP-004-efficiency.md:
+  moscow: Should
+  supported_by_rules:
+  - rules/AR-003-manageable.md
+  - rules/AR-001-reproducible.md
+  - rules/AR-011-observable.md
+  verified_by:
+  - verifications/V-016-efficiency-metrics-demonstrate-optimization.md
+  - verifications/V-042-technical-debt-is-tracked-and-prioritized.md
+  - verifications/V-068-efficiency-metrics-demonstrate-optimization.md
+  - verifications/V-073-observability-data-flows-to-central-platforms.md
+  - verifications/V-058-efficiency-metrics-demonstrate-optimization.md
+  - verifications/V-063-observability-data-flows-to-central-platforms.md
+AP-005-proven.md:
+  moscow: Should
+  supported_by_rules:
+  - rules/AR-001-reproducible.md
+  - rules/AR-002-modular.md
+  verified_by:
+  - verifications/V-017-technology-choices-follow-proven-patterns.md
+  - verifications/V-069-technology-choices-follow-proven-patterns.md
+  - verifications/V-059-technology-choices-follow-proven-patterns.md
+AP-006-supportable.md:
+  moscow: Should
+  supported_by_rules:
+  - rules/AR-003-manageable.md
+  - rules/AR-009-versioned.md
+  verified_by:
+  - verifications/V-018-support-capabilities-meet-sla-requirements.md
+  - verifications/V-072-documentation-is-current-and-comprehensive.md
+  - verifications/V-062-documentation-is-current-and-comprehensive.md
+AP-007-resiliency.md:
+  moscow: Should
+  supported_by_rules:
+  - rules/AR-005-available.md
+  - rules/AR-007-secure.md
+  - rules/AR-015-recoverable.md
+  verified_by:
+  - verifications/V-019-resilience-testing-validates-recovery-capabilities.md
+AP-008-interoperability.md:
+  moscow: Must
+  supported_by_rules:
+  - rules/AR-002-modular.md
+  - rules/AR-013-discoverable.md
+  verified_by:
+  - verifications/V-020-interoperability-standards-are-enforced.md
+AP-009-business-alignment.md:
+  moscow: Must
+  supported_by_rules:
+  - rules/AR-008-documented.md
+  - rules/AR-014-cost-trackable.md
+  verified_by:
+  - verifications/V-021-business-it-alignment-is-measurable.md
+  - verifications/V-040-end-to-end-traceability-from-principles-to-implementation.md
+  - verifications/V-074-end-to-end-traceability-from-principles-to-implementation.md
+  - verifications/V-064-end-to-end-traceability-from-principles-to-implementation.md
+AP-010-technology-independence.md:
+  moscow: Should
+  supported_by_rules:
+  - rules/AR-002-modular.md
+  - rules/AR-001-reproducible.md
+  verified_by:
+  - verifications/V-022-technology-independence-enables-portability.md
+  - verifications/V-070-infrastructure-provisioning-is-fully-reproducible.md
+  - verifications/V-060-infrastructure-provisioning-is-fully-reproducible.md
+AP-011-data-stewardship.md:
+  moscow: Must
+  supported_by_rules:
+  - rules/AR-008-documented.md
+  - rules/AR-009-versioned.md
+  - rules/AR-006-auditable.md
+  verified_by:
+  - verifications/V-023-data-stewardship-roles-are-active.md
+AP-012-reusability.md:
+  moscow: Must
+  supported_by_rules:
+  - rules/AR-013-discoverable.md
+  - rules/AR-008-documented.md
+  - rules/AR-010-testable.md
+  verified_by:
+  - verifications/V-024-reusable-components-reduce-duplication.md
